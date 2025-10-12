@@ -29,6 +29,8 @@ changelog=
 # Tags are comma separated with spaces allowed
 tags=mean center,median center,central feature,standard distance, standard distance ellipse, cluster, accumulated mean center
 
+# Check the documentation for more information.
+plugin_dependencies=pysal, sklearn, openTSNE
 homepage=https://github.com/dj-spatial/spatial_analysis
 category=Spatial Analysis, Vector
 icon=icon.png
