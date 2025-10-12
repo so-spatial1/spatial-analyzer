@@ -133,8 +133,20 @@ class MeanCenterTracker(QgisAlgorithm):
             # mean centers by time stamp
             expr = QgsExpression(query)
             feat = cLayer.getFeatures(QgsFeatureRequest(expr))
-            pointCoords = getPointCoords(feat, weightFieldIndex)
-            centerFeat = getMeanCenter(pointCoords[0], pointCoords[1], pointCoords[2], timeStamp)
+            try:
+                pointCoords = getPointCoords(feat, weightFieldIndex)
+            except ValueError as exc:
+                feedback.reportError(self.tr(f"Skipping timestamp {timeStamp}: {exc}"))
+                continue
+            if not pointCoords or not pointCoords[0]:
+                feedback.reportError(self.tr(f"Skipping timestamp {timeStamp}: no valid points"))
+                continue
+            x, y, weights = pointCoords
+            try:
+                centerFeat = getMeanCenter(x, y, weights, timeStamp)
+            except ValueError as exc:
+                feedback.reportError(self.tr(f"Skipping timestamp {timeStamp}: {exc}"))
+                continue
             if centerFeat is None:
                 continue
             sink.addFeature(centerFeat, QgsFeatureSink.FastInsert)

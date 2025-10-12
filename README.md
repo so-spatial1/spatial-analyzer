@@ -9,6 +9,15 @@ The Plugin implements spatial clustering, central tendancy and distribution to p
 4. Regression(Geographically Weighted Regression)
 5. Dimension Reduction(PCA, t-SNE)
 
+## Installation
+Install dependencies: Open OSGeo4W Shell installed with QGIS as Administrator and type:
+```
+$ python -m pip install --upgrade pip
+$ python -m pip install pysal -U
+$ python -m pip install scikit-learn -U
+$ python -m pip install openTSNE -U
+```
+
 ## License
 The SpatialAnalyzer Plugin is free software; you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation.
 

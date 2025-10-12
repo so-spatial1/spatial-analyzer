@@ -32,13 +32,13 @@ from processing.tools import dataobjects
 import os
 import tempfile
 import numpy as np
-from scipy.cluster.vq import kmeans, whiten, vq
+from scipy.cluster.vq import kmeans, vq
 import plotly
 import plotly as plt
 import plotly.graph_objs as go
 from qgis.PyQt import uic
-from qgis.core import Qgis, QgsMessageLog, QgsNetworkAccessManager, QgsProcessingUtils 
-from qgis.gui import QgsMessageBar
+from qgis.core import Qgis, QgsMessageLog, QgsNetworkAccessManager, QgsProcessingUtils
+from qgis.gui import QgsMessageBar, QgsCollapsibleGroupBox
 from PyQt5.QtCore import QDate
 from qgis.PyQt.QtWidgets import QVBoxLayout
 from qgis.PyQt.QtWebKit import QWebSettings
@@ -85,19 +85,60 @@ class WssWidget(BASE, WIDGET):
         cLayer =  self.source
         to_cluster, variable_fields, normalized = self.options
         maxK = self.maxK.value()
-        # input --> numpy array
+
+        feat_list = list(cLayer.getFeatures())
+        if not feat_list:
+            return self.tr('Input layer contains no features.')
+
+        cleaned_rows = []
         if to_cluster == 'geom':
-            features = [[f.geometry().centroid().asPoint().x(), f.geometry().centroid().asPoint().y()] for f in cLayer.getFeatures()]
-            features = np.stack(features, axis = 0)
+            for feat in feat_list:
+                geom = feat.geometry()
+                if not geom or geom.isEmpty():
+                    continue
+                try:
+                    point = geom.centroid().asPoint()
+                except Exception:  # geometry cannot provide a point centroid
+                    continue
+                row = [point.x(), point.y()]
+                if np.any(~np.isfinite(row)):
+                    continue
+                cleaned_rows.append(row)
         else:
-            features = [[f[vf] for f in cLayer.getFeatures()] for vf in variable_fields]
-            features = np.stack(features, axis = 1)
+            if not variable_fields:
+                return self.tr('Select at least one field.')
+            for feat in feat_list:
+                row = []
+                valid = True
+                for field_name in variable_fields:
+                    value = feat[field_name]
+                    try:
+                        numeric = float(value)
+                    except (TypeError, ValueError):
+                        valid = False
+                        break
+                    if not np.isfinite(numeric):
+                        valid = False
+                        break
+                    row.append(numeric)
+                if valid:
+                    cleaned_rows.append(row)
+
+        if not cleaned_rows:
+            return self.tr('No valid records available for clustering.')
+
+        features = np.asarray(cleaned_rows, dtype=float)
+
+        if features.shape[0] < 2:
+            return self.tr('At least two valid records are required to compute WSS.')
+
+        if maxK > features.shape[0]:
+            return self.tr('Clusters should be less than or equal to the valid feature count.')
 
         if normalized:
-            features = whiten(features)
-        if maxK > features.shape[0]:
-            msg = u'Clusters should be less than feature count.'
-            return msg
+            scale = np.std(features, axis=0)
+            scale[scale == 0] = 1.0
+            features = features / scale
 
         lists = []
         for i in range(0, 20):

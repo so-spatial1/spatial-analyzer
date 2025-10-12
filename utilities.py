@@ -5,31 +5,57 @@ from scipy.spatial.distance import squareform
 from scipy.optimize import minimize
 
 def getPointCoords(feat, weightFieldIndex):
-    try:    
+    """Extract x, y coordinate lists and associated weights from features.
+
+    Parameters
+    ----------
+    feat : iterable
+        Iterable of QgsFeature like objects.
+    weightFieldIndex : int
+        Index of the field containing the weight value.  A negative value
+        treats all weights as 1.
+
+    Returns
+    -------
+    tuple
+        Three element tuple of (x coordinates, y coordinates, weights).
+
+    Raises
+    ------
+    ValueError
+        If any feature is missing required geometry/attributes or if the
+        iterator is empty.
+    """
+    try:
         pts = []
         weights = []
         for f in feat:
             pts.append(f.geometry().asPoint())
-            if weightFieldIndex >=0:
+            if weightFieldIndex >= 0:
                 weights.append(f.attributes()[weightFieldIndex])
             else:
                 weights.append(1)
-        weights = np.asarray(weights, dtype = np.float32)
-
-        x=[pt[0] for pt in pts]
-        y=[pt[1] for pt in pts]
-    except:
-        pass
-    else:
+        if not pts:
+            raise ValueError("No features provided")
+        weights = np.asarray(weights, dtype=np.float32)
+        x = [pt[0] for pt in pts]
+        y = [pt[1] for pt in pts]
         return x, y, weights
-
+    except (AttributeError, IndexError, TypeError, ValueError) as exc:
+        raise ValueError("Invalid feature data") from exc
 
 def getMeanCenter(x, y, weights, id):
+    """Return a feature representing the weighted mean center."""
     try:
+        x = np.asarray(x, dtype=np.float32)
+        y = np.asarray(y, dtype=np.float32)
+        weights = np.asarray(weights, dtype=np.float32)
+        if weights.size == 0 or np.sum(weights) == 0:
+            raise ValueError("Weights must not be empty or all zeros")
         wx = x * weights
         wy = y * weights
-        mx=sum(wx)/sum(weights)
-        my=sum(wy)/sum(weights)
+        mx = np.sum(wx) / np.sum(weights)
+        my = np.sum(wy) / np.sum(weights)
 
         meanCenter = QgsPointXY(mx, my)
 
@@ -39,25 +65,31 @@ def getMeanCenter(x, y, weights, id):
         centerFeat.setGeometry(centerGeom)
         attrs.extend([id])
         centerFeat.setAttributes(attrs)
-    except:
-        pass
-    else:
         return centerFeat
+    except (ZeroDivisionError, TypeError, ValueError) as exc:
+        raise ValueError("Failed to compute mean center") from exc
 
 def getMedianCenter(x, y, weights, id):
+    """Return a feature representing the weighted median center."""
     try:
-        sumWeights = sum(weights)
-        mx=sum(x)/len(x)
-        my=sum(y)/len(y)
+        x = np.asarray(x, dtype=np.float32)
+        y = np.asarray(y, dtype=np.float32)
+        weights = np.asarray(weights, dtype=np.float32)
+        sumWeights = np.sum(weights)
+        if weights.size == 0 or sumWeights == 0:
+            raise ValueError("Weights must not be empty or all zeros")
+        mx = np.sum(x) / len(x)
+        my = np.sum(y) / len(y)
 
-        ## initial guesses
+        # initial guesses
         cMedianCenter = np.zeros(2)
         cMedianCenter[0] = mx
         cMedianCenter[1] = my
 
-        ## define objective
+        # define objective
         def objective(cMedianCenter):
-            return sum(np.sqrt((cMedianCenter[0] - x)**2 + (cMedianCenter[1] - y)**2)*weights/sumWeights)
+            return np.sum(np.sqrt((cMedianCenter[0] - x) ** 2 +
+                                  (cMedianCenter[1] - y) ** 2) * weights / sumWeights)
 
         solution = minimize(objective, cMedianCenter, method='Nelder-Mead')
         medianCenter = QgsPointXY(solution.x[0], solution.x[1])
@@ -68,26 +100,31 @@ def getMedianCenter(x, y, weights, id):
         centerFeat.setGeometry(centerGeom)
         attrs.extend([id])
         centerFeat.setAttributes(attrs)
-    except:
-        pass
-    else:
         return centerFeat
+    except (ZeroDivisionError, TypeError, ValueError) as exc:
+        raise ValueError("Failed to compute median center") from exc
 
 def getCentralFeature(x, y, weights, id, dMetricIndex):
+    """Return a feature representing the weighted central feature."""
     try:
         dMetric = ['euclidean', 'cityblock']
-        sumWeights = sum(weights)
-        coords = np.stack([x, y], axis = -1)
-        distanceVector = pdist(coords, metric = dMetric[dMetricIndex])
+        x = np.asarray(x, dtype=np.float32)
+        y = np.asarray(y, dtype=np.float32)
+        weights = np.asarray(weights, dtype=np.float32)
+        sumWeights = np.sum(weights)
+        if weights.size == 0 or sumWeights == 0:
+            raise ValueError("Weights must not be empty or all zeros")
+        coords = np.stack([x, y], axis=-1)
+        distanceVector = pdist(coords, metric=dMetric[dMetricIndex])
         distanceMatrix = squareform(distanceVector) / weights * sumWeights
-        minDistanceIndex = np.argmin(sum(distanceMatrix))
+        minDistanceIndex = np.argmin(np.sum(distanceMatrix, axis=1))
         centralFeat = QgsFeature()
         centralGeom = QgsGeometry.fromPointXY(QgsPointXY(x[minDistanceIndex], y[minDistanceIndex]))
         attrs = centralFeat.attributes()
         centralFeat.setGeometry(centralGeom)
         attrs.extend([id])
-        centralFeat.setAttributes(attrs)
-    except:
-        pass
-    else:
-        return centralFeat
+        centerFeat = centralFeat
+        centerFeat.setAttributes(attrs)
+        return centerFeat
+    except (IndexError, ZeroDivisionError, TypeError, ValueError) as exc:
+        raise ValueError("Failed to compute central feature") from exc

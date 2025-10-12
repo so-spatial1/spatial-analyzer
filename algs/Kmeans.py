@@ -31,7 +31,7 @@ import os
 import codecs
 
 from qgis.PyQt.QtCore import QVariant, QUrl
-from qgis.PyQt.QtGui import QIcon
+from qgis.PyQt.QtGui import QIcon, QColor
 from qgis.PyQt.QtWebKitWidgets import QWebView
 
 from qgis.core import (QgsWkbTypes,
@@ -45,6 +45,9 @@ from qgis.core import (QgsWkbTypes,
                        QgsProcessingException,
                        QgsProcessingUtils,
                        QgsFeatureSink,
+                       QgsSymbol,
+                       QgsRendererCategory,
+                       QgsCategorizedSymbolRenderer,
                        QgsProcessingParameterDefinition,
                        QgsProcessingParameterEnum,
                        QgsProcessingParameterBoolean,
@@ -58,7 +61,7 @@ from processing.algs.qgis.QgisAlgorithm import QgisAlgorithm
 from spatial_analysis.forms.KmeansWssParam import ParameterWss
 from spatial_analysis.forms.VariableParam import ParameterVariable
 import numpy as np
-from scipy.cluster.vq import kmeans,vq, whiten, kmeans2
+from scipy.cluster.vq import kmeans2
 import geopandas as gpd
 
 pluginPath = os.path.split(os.path.split(os.path.dirname(__file__))[0])[0]
@@ -122,7 +125,7 @@ class Kmeans(QgisAlgorithm):
                                                        self.tr(u'Number of Clusters(K)'),
                                                        QgsProcessingParameterNumber.Integer,
                                                        3, False, 2, 99999999))
-        wss_param = ParameterWss(self.WSS, self.tr('<hr>Elbow Graph'), layer_param=self.INPUT, variable_options=self.V_OPTIONS)
+        wss_param = ParameterWss(self.WSS, self.tr('<hr> '), layer_param=self.INPUT, variable_options=self.V_OPTIONS)
         wss_param.setMetadata({'widget_wrapper': {'class': 'spatial_analysis.forms.KmeansWss.WssWidgetWrapper'}})
         self.addParameter(wss_param)
         self.addParameter(QgsProcessingParameterFeatureSink(self.OUTPUT, 
@@ -151,16 +154,20 @@ class Kmeans(QgisAlgorithm):
 
         # input --> numpy array
         if to_cluster == 'geom':
-            features = [[f.geometry().centroid().asPoint().x(), f.geometry().centroid().asPoint().y()] for f in cLayer.getFeatures()]
-            features = np.stack(features, axis = 0)
+            raw_features = [[f.geometry().centroid().asPoint().x(), f.geometry().centroid().asPoint().y()] for f in cLayer.getFeatures()]
+            raw_features = np.stack(raw_features, axis=0)
         else:
-            features = [[f[fld] for f in cLayer.getFeatures()] for fld in variable_fields]
-            features = np.stack(features, axis = 1)
-        features = features.astype(float)
+            raw_features = [[f[fld] for f in cLayer.getFeatures()] for fld in variable_fields]
+            raw_features = np.stack(raw_features, axis=1)
+        raw_features = raw_features.astype(float)
         if normalized:
-            features = whiten(features)
+            scale = np.std(raw_features, axis=0)
+            scale[scale == 0] = 1.0
+            features = raw_features / scale
             if_normalized = "Yes"
         else:
+            scale = np.ones(raw_features.shape[1], dtype=float)
+            features = raw_features.copy()
             if_normalized = "No"
         total_ss = np.sum((features - np.mean(features, axis = 0))**2)
         features = np.insert(features, 0, range(0, feat_count), axis = 1) # add index
@@ -168,21 +175,24 @@ class Kmeans(QgisAlgorithm):
         # k means clustering
         centroids, label = kmeans2(features[:, 1:], k, iter, minit=self.minit_name[1][minit_idx])
         features = np.insert(features, 1, label, axis = 1) # add cluster id
-        centroids =  np.insert(centroids, 0, range(0, k), axis = 1) # add cluster id
+        centroids_with_id =  np.insert(centroids.copy(), 0, range(0, k), axis = 1) # add cluster id
 
         pts = []
         wss_by_cluster = []
         for cluster_id in range(0, k):
             chunk = features[features[:, 1]==cluster_id]
-            distance_squared = np.sum((chunk[:, 2:] - centroids[cluster_id, 1:])**2, axis=1)
+            distance_squared = np.sum((chunk[:, 2:] - centroids_with_id[cluster_id, 1:])**2, axis=1)
             chunk = np.insert(chunk, 2, distance_squared, axis=1)
             pts.append(chunk)
             wss_by_cluster.append(np.sum(distance_squared))
         pts = np.vstack(pts)
         pts = pts[np.argsort(pts[:, 0]), :] #re-order by index(1st column)
 
-
-        centroids = np.insert(centroids, 1, wss_by_cluster, axis=1) # add wss
+        centroids_scaled = np.insert(centroids.copy(), 0, range(0, k), axis=1)
+        centroids_scaled = np.insert(centroids_scaled, 1, wss_by_cluster, axis=1)
+        centroids_original_vals = centroids * scale
+        centroids_original = np.insert(centroids_original_vals, 0, range(0, k), axis=1)
+        centroids_original = np.insert(centroids_original, 1, wss_by_cluster, axis=1)
         cluster = pts[:,1]
         distance = pts[:,2]
         
@@ -190,6 +200,7 @@ class Kmeans(QgisAlgorithm):
         feedback.pushInfo("Building Layers")
 	
         # cluster layer
+        cluster_colors = [QColor.fromHsv(int(360 * i / max(1, k)), 255, 200) for i in range(k)]
         fields = cLayer.fields()
         new_fields = QgsFields()
         new_fields.append(QgsField('K_Cluster_ID', QVariant.Int))
@@ -206,17 +217,37 @@ class Kmeans(QgisAlgorithm):
             feedback.setProgress(int(i / feat_count * 100))
         feedback.setProgress(0)
         feedback.pushInfo("Done with Cluster Layer")
-		
+
+        cluster_layer = QgsProcessingUtils.mapLayerFromString(cluster_dest_id, context)
+        cluster_geom_type = cluster_layer.geometryType()
+        if cluster_geom_type != QgsWkbTypes.NullGeometry:
+            categories = []
+            for idx, color in enumerate(cluster_colors):
+                symbol = QgsSymbol.defaultSymbol(cluster_geom_type)
+                if symbol is None:
+                    continue
+                symbol.setColor(color)
+                categories.append(QgsRendererCategory(idx, symbol, str(idx)))
+            if categories:
+                renderer = QgsCategorizedSymbolRenderer('K_Cluster_ID', categories)
+                cluster_layer.setRenderer(renderer)
+                cluster_layer.triggerRepaint()
+                style_path = os.path.join(QgsProcessingUtils.tempFolder(), 'kmeans_cluster.qml')
+                cluster_layer.saveNamedStyle(style_path)
+                if context.willLoadLayerOnCompletion(cluster_dest_id):
+                    details = context.layersToLoadOnCompletion()[cluster_dest_id]
+                    details.style = style_path
+
         # centroid layer
         if to_cluster == 'geom':
             xy_fields = QgsFields()
             xy_fields.append(QgsField('K_Cluster_ID', QVariant.Int))
             xy_fields.append(QgsField('WSS', QVariant.Double))
             (centroid_sink, centroid_dest_id) = self.parameterAsSink(parameters, self.OUTPUT_CENTROID, context,
-                                                xy_fields, QgsWkbTypes.Point, cLayer.sourceCrs())		
+                                                xy_fields, QgsWkbTypes.Point, cLayer.sourceCrs())
 
             total = k
-            for j, center in enumerate(centroids):
+            for j, center in enumerate(centroids_original):
                 centerFeat = QgsFeature()
                 if to_cluster == 'geom':
                     centerGeom = QgsGeometry.fromPointXY(QgsPointXY(center[2],center[3]))
@@ -227,6 +258,22 @@ class Kmeans(QgisAlgorithm):
                 centroid_sink.addFeature(centerFeat, QgsFeatureSink.FastInsert)
                 feedback.setProgress(int(j / total * 100))
             feedback.pushInfo(self.tr("Done with Cluster <br> Centroid Layer"))
+
+            centroid_layer = QgsProcessingUtils.mapLayerFromString(centroid_dest_id, context)
+            categories = []
+            for idx, color in enumerate(cluster_colors):
+                symbol = QgsSymbol.defaultSymbol(centroid_layer.geometryType())
+                symbol.setColor(color)
+                categories.append(QgsRendererCategory(idx, symbol, str(idx)))
+            renderer = QgsCategorizedSymbolRenderer('K_Cluster_ID', categories)
+            centroid_layer.setRenderer(renderer)
+            centroid_layer.triggerRepaint()
+            centroid_style = os.path.join(QgsProcessingUtils.tempFolder(), 'kmeans_centroid.qml')
+            centroid_layer.saveNamedStyle(centroid_style)
+            if context.willLoadLayerOnCompletion(centroid_dest_id):
+                details = context.layersToLoadOnCompletion()[centroid_dest_id]
+                details.style = centroid_style
+
         else:
             centroid_sink = None
             centroid_dest_id = None
@@ -234,7 +281,7 @@ class Kmeans(QgisAlgorithm):
         # output report
         output_report = self.parameterAsFileOutput(parameters, self.OUTPUT_REPORT, context)
 
-        total_wss = np.sum(centroids[:, 1])
+        total_wss = float(np.sum(wss_by_cluster))
         td_blue = '<td rowspan="1" \
                     colspan="1" \
                     bgcolor="rgb(0, 80, 141)" \
@@ -266,22 +313,31 @@ class Kmeans(QgisAlgorithm):
             f.write('<p> The between cluster sum of squares: ' + str(total_ss-total_wss) + '</p>\n')
             f.write('<p> The ratio of between to total sum of squares: ' + str((total_ss-total_wss) / total_ss * 100) + '%</p>\n')
             # start of table
-            f.write('<table cellpadding="0" cellspacing="1" bgcolor="#ffffff" style="background-color: rgb(204, 204, 204);">')
-            f.write('<tbody>')
-            f.write('<tr style="">')
-            f.write(td_blue + 'Cluster Centers' + '</span></div></td>')
-            f.write(td_blue + 'WSS' + '</span></div></td>')
             
             cols = ['X', 'Y'] if to_cluster == 'geom' else variable_fields
-            for c in cols:
-                f.write(td_blue + str(c) + '</span></div></td>')
-                
-            for centroid in centroids:
-                f.write('<tr style="height: 24px;">')
-                for cent in centroid:
-                    f.write(td_white + str(cent) + '</span></div></td>')
-                f.write('<tr>')
-            f.write('</tbody></table>')
+
+            def write_centroid_table(title, centroid_rows):
+                f.write('<p><strong>' + title + '</strong></p>')
+                f.write('<table cellpadding="0" cellspacing="1" bgcolor="#ffffff" style="background-color: rgb(204, 204, 204);">')
+                f.write('<tbody>')
+                f.write('<tr style="">')
+                f.write(td_blue + 'Cluster Centers' + '</span></div></td>')
+                f.write(td_blue + 'WSS' + '</span></div></td>')
+                for c in cols:
+                    f.write(td_blue + str(c) + '</span></div></td>')
+                for centroid in centroid_rows:
+                    f.write('<tr style="height: 24px;">')
+                    for cent in centroid:
+                        f.write(td_white + str(cent) + '</span></div></td>')
+                    f.write('<tr>')
+                f.write('</tbody></table>')
+
+            if normalized:
+                write_centroid_table('Cluster Centers (Standardized)', centroids_scaled)
+                write_centroid_table('Cluster Centers (Original Units)', centroids_original)
+            else:
+                write_centroid_table('Cluster Centers', centroids_original)
+
             f.write('</body></html>\n')
 
         results = {}

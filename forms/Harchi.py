@@ -32,7 +32,6 @@ from processing.tools import dataobjects
 import os
 import tempfile
 import numpy as np
-from scipy.cluster.vq import whiten
 from scipy.cluster.hierarchy import linkage
 from scipy.cluster.hierarchy import cophenet
 from scipy.spatial.distance import pdist
@@ -44,11 +43,12 @@ import plotly.figure_factory as ff
 from plotly.subplots import make_subplots
 from qgis.PyQt import uic
 from qgis.core import QgsNetworkAccessManager, QgsProject, QgsMessageLog, QgsProcessingUtils
+from qgis.gui import QgsCollapsibleGroupBox
 from qgis.PyQt.QtWidgets import QVBoxLayout
 from qgis.PyQt.QtWebKit import QWebSettings
 from qgis.PyQt.QtWebKitWidgets import QWebView
 from qgis.PyQt.QtCore import QUrl
-from PyQt5.QtWidgets import QMessageBox
+from PyQt5.QtWidgets import QMessageBox, QSizePolicy
 
 pluginPath = os.path.dirname(__file__)
 WIDGET, BASE = uic.loadUiType(
@@ -65,7 +65,9 @@ class HarchiWidget(BASE, WIDGET):
         self.harchi_webview_layout = QVBoxLayout()
         self.harchi_webview_layout.setContentsMargins(0,0,0,0)
         self.harchi_panel.setLayout(self.harchi_webview_layout)
+        self.harchi_panel.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         self.harchi_webview = QWebView()
+        self.harchi_webview.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         self.harchi_webview.page().setNetworkAccessManager(QgsNetworkAccessManager.instance())
         harchi_webview_settings = self.harchi_webview.settings()
         harchi_webview_settings.setAttribute(QWebSettings.WebGLEnabled, True)
@@ -136,18 +138,65 @@ class HarchiWidget(BASE, WIDGET):
         if cLayer is None:
             msg = u'No Layer Selected.'
             return msg
-        to_cluster, variable_fields, normalized = self.options
+        try:
+            to_cluster, variable_fields, normalized = self.options
+        except (TypeError, ValueError):
+            return self.tr('Clustering options are not available.')
 
-        # input --> numpy array
+        feat_list = list(cLayer.getFeatures())
+        if not feat_list:
+            return self.tr('Input layer contains no features.')
+
+        cleaned_rows = []
+        kept_feats = []
+
         if to_cluster == 'geom':
-            features = [[f.geometry().centroid().asPoint().x(), f.geometry().centroid().asPoint().y()] for f in cLayer.getFeatures()]
-            features = np.stack(features, axis = 0)
+            for feat in feat_list:
+                geom = feat.geometry()
+                if not geom or geom.isEmpty():
+                    continue
+                try:
+                    point = geom.centroid().asPoint()
+                except Exception:
+                    continue
+                coords = [point.x(), point.y()]
+                if np.any(~np.isfinite(coords)):
+                    continue
+                cleaned_rows.append(coords)
+                kept_feats.append(feat)
         else:
-            features = [[f[vf] for f in cLayer.getFeatures()] for vf in variable_fields]
-            features = np.stack(features, axis = 1)
+            if not variable_fields:
+                return self.tr('Select at least one field.')
+            for feat in feat_list:
+                row = []
+                valid = True
+                for field_name in variable_fields:
+                    value = feat[field_name]
+                    try:
+                        numeric = float(value)
+                    except (TypeError, ValueError):
+                        valid = False
+                        break
+                    if not np.isfinite(numeric):
+                        valid = False
+                        break
+                    row.append(numeric)
+                if valid:
+                    cleaned_rows.append(row)
+                    kept_feats.append(feat)
+
+        if not cleaned_rows:
+            return self.tr('No valid records available for clustering.')
+
+        features = np.asarray(cleaned_rows, dtype=float)
+
+        if features.shape[0] < 2:
+            return self.tr('At least two valid records are required to build the dendrogram.')
 
         if normalized:
-            features = whiten(features)
+            scale = np.std(features, axis=0)
+            scale[scale == 0] = 1.0
+            features = features / scale
 
         dMethod = ['centroid', 'ward', 'single', 'complete', 'average']
 
@@ -164,9 +213,19 @@ class HarchiWidget(BASE, WIDGET):
             else:
                 threshold_jump = self.doubleSpinBox.value()
 
-            labels=[f.attributes()[self.labelCB.currentIndex()] for f in cLayer.getFeatures()]
-            hText=list(dists)
-            dendro = ff.create_dendrogram(features, linkagefun = lambda x : Z, orientation = 'bottom', labels = labels, hovertext = ddata['dcoord'])
+            label_index = self.labelCB.currentIndex()
+            if label_index >= 0:
+                labels = [str(feat.attributes()[label_index]) for feat in kept_feats]
+            else:
+                labels = [str(feat.id()) for feat in kept_feats]
+            hText = list(dists)
+            dendro = ff.create_dendrogram(
+                features,
+                linkagefun=lambda x: Z,
+                orientation='bottom',
+                labels=labels,
+                hovertext=ddata['dcoord']
+            )
 
             # 수평선 추가 (임계 거리 표시)
             dendro.add_shape(
@@ -181,19 +240,27 @@ class HarchiWidget(BASE, WIDGET):
             )
 
             #그래프
-            dendro['layout'].update({'autosize': True, 'plot_bgcolor': 'white', 'title' : 'Dendrogram by ' + dMethod[self.linkageIdx] + ' method' })
-            dendro['layout']['xaxis'].update({'mirror': False,
-                                               'showgrid': False,
-                                               'showline': False,
-                                               'zeroline': False,
-                                               'ticks':""})
-            dendro['layout']['yaxis'].update({'mirror': False,
-                                              'showgrid': False,
-                                              'showline': False,
-                                              'zeroline': False,
-                                              'showticklabels': True,
-                                              'ticks': ""})
-            self.fig = {'data' : dendro}
+            dendro['layout'].update({
+                'autosize': True,
+                'plot_bgcolor': 'white',
+                'title': 'Dendrogram by ' + dMethod[self.linkageIdx] + ' method'
+            })
+            dendro['layout']['xaxis'].update({
+                'mirror': False,
+                'showgrid': False,
+                'showline': False,
+                'zeroline': False,
+                'ticks': ""
+            })
+            dendro['layout']['yaxis'].update({
+                'mirror': False,
+                'showgrid': False,
+                'showline': False,
+                'zeroline': False,
+                'showticklabels': True,
+                'ticks': ""
+            })
+            self.fig = dendro
         elif self.chart_id == 1:
             #Cophenet Correlation
             cophenet_corr_raw = []
@@ -341,8 +408,9 @@ class HarchiWidget(BASE, WIDGET):
         if  msg != 'Success':
             QMessageBox.information(self, u"Input Error", msg)
         else:
-            config = {'scrollZoom': True, 'editable': False, 'displayModeBar': False}
-            raw_plot = plotly.offline.plot(self.fig, output_type='div', config=config, show_link = False)
+            config = {'scrollZoom': True, 'editable': False, 'displayModeBar': False, 'responsive': True}
+            raw_plot = plotly.offline.plot(self.fig, output_type='div', config=config, show_link=False)
+            raw_plot = f"<html><head><meta charset='utf-8'/></head><body style='margin:0; overflow:hidden;'>{raw_plot}</body></html>"
             plot_path = os.path.join(tempfile.gettempdir(), 'dendro'+'.html')
             with open(plot_path, "w") as f:
                 f.write(raw_plot)

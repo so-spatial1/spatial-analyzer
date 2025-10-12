@@ -19,9 +19,10 @@ SpatialAnalyzer
  ******************************************************************************/
 """
 
-__author__ = 'OpenAI'
-__date__ = 'October 2024'
-__copyright__ = '(C) 2024, OpenAI'
+__author__ = 'D.J Paek'
+__date__ = 'July 2024'
+__copyright__ = '(C) 2024, D.J Paek'
+
 
 # This will get replaced with a git SHA1 when you do a git archive
 __revision__ = '$Format:%H$'
@@ -56,6 +57,7 @@ from qgis.core import (
 )
 
 from processing.algs.qgis.QgisAlgorithm import QgisAlgorithm
+from spatial_analysis.forms.VariableParam import ParameterVariable
 
 pluginPath = os.path.split(os.path.split(os.path.dirname(__file__))[0])[0]
 
@@ -104,16 +106,9 @@ class Tsne(QgisAlgorithm):
         self.addParameter(QgsProcessingParameterFeatureSource(self.INPUT,
                                                               self.tr('Input Layer'),
                                                               [QgsProcessing.TypeVector]))
-        self.addParameter(
-            QgsProcessingParameterField(
-                self.FIELDS,
-                self.tr('Variable Fields'),
-                None,
-                parentLayerParameterName=self.INPUT,
-                type=QgsProcessingParameterField.Numeric,
-                allowMultiple=True
-            )
-        )
+        variable_param = ParameterVariable(self.FIELDS, self.tr('Variable Fields'), layer_param=self.INPUT)
+        variable_param.setMetadata({'widget_wrapper': {'class': 'spatial_analysis.forms.VariableWidget.VariableWidgetWrapper'}})
+        self.addParameter(variable_param)
         self.addParameter(QgsProcessingParameterNumber(self.PERPLEXITY,
                                                        self.tr('Perplexity'),
                                                        QgsProcessingParameterNumber.Double,
@@ -209,9 +204,27 @@ class Tsne(QgisAlgorithm):
             iter_kw = 'n_iter' if 'n_iter' in sig.parameters else 'max_iter'
 
         layer = self.parameterAsSource(parameters, self.INPUT, context)
-        fields = self.parameterAsFields(parameters, self.FIELDS, context)
-        if not fields:
-            raise QgsProcessingException(self.tr('No Fields Selected.'))
+        to_use, fields, _ = self.parameterAsMatrix(parameters, self.FIELDS, context)
+        feats = list(layer.getFeatures())
+        if not feats:
+            raise QgsProcessingException(self.tr('Input layer contains no features.'))
+        if to_use == 'geom':
+            coords = []
+            for feat in feats:
+                geom = feat.geometry()
+                if geom is None or geom.isEmpty():
+                    raise QgsProcessingException(self.tr('Feature {0} has no geometry.').format(feat.id()))
+                centroid = geom.centroid()
+                if centroid.isEmpty():
+                    raise QgsProcessingException(self.tr('Failed to calculate centroid for feature {0}.').format(feat.id()))
+                point = centroid.asPoint()
+                coords.append([point.x(), point.y()])
+            data = np.array(coords, dtype=float)
+            fields = ['X', 'Y']
+        else:
+            if not fields:
+                raise QgsProcessingException(self.tr('No Fields Selected.'))
+            data = np.array([[f[fld] for fld in fields] for f in feats], dtype=float)
         perplexity = self.parameterAsDouble(parameters, self.PERPLEXITY, context)
         theta = self.parameterAsDouble(parameters, self.THETA, context)
         max_iter = self.parameterAsInt(parameters, self.MAX_ITER, context)
@@ -227,7 +240,10 @@ class Tsne(QgisAlgorithm):
         seed = self.parameterAsInt(parameters, self.SEED, context) if use_seed else None
         show_evolution = self.parameterAsBoolean(parameters, self.SHOW_EVOLUTION, context)
 
+<<<<<<< Updated upstream
         feats = list(layer.getFeatures())
+=======
+>>>>>>> Stashed changes
         point_size = 10
         fig_size = (12, 8)
         label_size = 12
@@ -243,24 +259,36 @@ class Tsne(QgisAlgorithm):
         else:
             unique = cat_to_color = colors = None
 
+<<<<<<< Updated upstream
         data = [[f[fld] for fld in fields] for f in feats]
         data = np.array(data, dtype=float)
         n_samples = data.shape[0]
+=======
+        n_samples = data.shape[0]
+
+>>>>>>> Stashed changes
         if transform == 'standardize':
-            data_proc = (data - np.mean(data, axis=0)) / np.std(data, axis=0)
+            meanv = np.mean(data, axis=0)
+            stdv = np.std(data, axis=0)
+            stdv = np.where(stdv == 0, 1, stdv)
+            data_proc = (data - meanv) / stdv
         elif transform == 'standardize_mad':
             med = np.median(data, axis=0)
             mad = np.median(np.abs(data - med), axis=0)
+            mad = np.where(mad == 0, 1, mad)
             data_proc = (data - med) / mad
         elif transform == 'range_adjust':
             minv = np.min(data, axis=0)
             maxv = np.max(data, axis=0)
-            data_proc = (data - minv) / (maxv - minv)
+            rangev = maxv - minv
+            rangev = np.where(rangev == 0, 1, rangev)
+            data_proc = (data - minv) / rangev
         elif transform == 'range_standardize':
             minv = np.min(data, axis=0)
             maxv = np.max(data, axis=0)
             rangev = maxv - minv
             meanv = (maxv + minv) / 2
+            rangev = np.where(rangev == 0, 1, rangev)
             data_proc = (data - meanv) / rangev
         elif transform == 'demean':
             data_proc = data - np.mean(data, axis=0)

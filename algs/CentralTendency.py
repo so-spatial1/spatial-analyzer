@@ -126,8 +126,11 @@ class CentralTendency(QgisAlgorithm):
         cLayer = self.parameterAsSource(parameters, self.INPUT_POINTS, context)
         fields = cLayer.fields()
         groupField = self.parameterAsString(parameters, self.GROUP_FIELD, context)
-        groupFieldIndex = fields.lookupField(self.parameterAsString(parameters, self.GROUP_FIELD, context))
-        groupList = sorted(cLayer.uniqueValues(groupFieldIndex))
+        groupFieldIndex = fields.lookupField(groupField)
+        if groupFieldIndex > -1:
+            groupList = sorted(cLayer.uniqueValues(groupFieldIndex))
+        else:
+            groupList = []
 
         meanCenter = self.parameterAsBool(parameters, self.MEAN_CENTER, context)
         medianCenter = self.parameterAsBool(parameters, self.MEDIAN_CENTER, context)

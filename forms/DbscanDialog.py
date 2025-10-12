@@ -56,6 +56,12 @@ class ParameterControlDialog(QDialog):
         self.eps_min = 1.0
         self.eps_max = 10.0
         self.eps_factor = 10
+<<<<<<< Updated upstream
+=======
+        self._data_ready = False
+        self._data_error_message = None
+        self._message_widget = None
+>>>>>>> Stashed changes
         self.timer_interval = 50
         self.fill_alpha = 50
         self.marker_size = "0.5"
@@ -184,6 +190,7 @@ class ParameterControlDialog(QDialog):
     def closeEvent(self, event):
         DBSCANAnimator.clear_active()
         super().closeEvent(event)
+        self._set_data_error(None)
 
     # ------------------------------------------------------------------
     def toggle_controls(self, enabled):
@@ -201,20 +208,21 @@ class ParameterControlDialog(QDialog):
     # ------------------------------------------------------------------
     def set_playing(self, playing):
         geom_mode = self.variable_widget.v_type == "geom"
+        ready = self._data_ready and self.eps is not None
         self.layer_combo.setEnabled(not playing)
-        self.run_btn.setEnabled(not playing)
-        self.play_btn.setEnabled(geom_mode and not playing)
-        self.clear_btn.setEnabled(geom_mode and not playing)
+        self.run_btn.setEnabled(ready and not playing)
+        self.play_btn.setEnabled(geom_mode and ready and not playing)
+        self.clear_btn.setEnabled(geom_mode and ready and not playing)
         self.minpts_spin.setEnabled(not playing)
-        self.minpts_label.setEnabled(not playing)
-        self.eps_slider.setEnabled(not playing)
-        self.eps_label.setEnabled(not playing)
-        self.interval_slider.setEnabled(geom_mode and not playing)
-        self.interval_label.setEnabled(geom_mode and not playing)
-        self.fill_alpha_slider.setEnabled(geom_mode and not playing)
-        self.fill_alpha_label.setEnabled(geom_mode and not playing)
-        self.pause_btn.setEnabled(geom_mode and playing)
-        self.stop_btn.setEnabled(geom_mode and playing)
+        self.minpts_label.setEnabled(True)
+        self.eps_slider.setEnabled(ready and not playing)
+        self.eps_label.setEnabled(True)
+        self.interval_slider.setEnabled(geom_mode and ready and not playing)
+        self.interval_label.setEnabled(geom_mode and ready and not playing)
+        self.fill_alpha_slider.setEnabled(geom_mode and ready and not playing)
+        self.fill_alpha_label.setEnabled(geom_mode and ready and not playing)
+        self.pause_btn.setEnabled(geom_mode and ready and playing)
+        self.stop_btn.setEnabled(geom_mode and ready and playing)
 
     # ------------------------------------------------------------------
     def on_layer_changed(self, layer):
@@ -225,7 +233,12 @@ class ParameterControlDialog(QDialog):
 
         if isinstance(layer, QgsVectorLayer):
             self.layer_id = layer.id()
-            if layer.geometryType() != QgsWkbTypes.PointGeometry:
+            source_layer = layer
+            if layer.wkbType() in (QgsWkbTypes.NoGeometry,) or (
+                QgsWkbTypes.geometryType(layer.wkbType()) == QgsWkbTypes.NullGeometry
+            ):
+                self.layer = layer
+            elif layer.geometryType() != QgsWkbTypes.PointGeometry:
                 res = processing.run(
                     "native:centroids", {"INPUT": layer, "OUTPUT": "memory:"}
                 )
@@ -233,7 +246,8 @@ class ParameterControlDialog(QDialog):
             else:
                 self.layer = layer
 
-            self.variable_widget.setSource(self.layer)
+            self.variable_widget.setSource(self.layer, source_layer)
+            self._data_ready = False
 
             # 기본 파라미터 값을 초기화
             self.min_points = 4
@@ -270,7 +284,9 @@ class ParameterControlDialog(QDialog):
                         sym = syms[0]
             self.marker_size = str(sym.size()) if sym and hasattr(sym, "size") else "2"
 
-            self.eps = self.compute_knn_kth_distance(self.min_points, eps_for_ratio=True)
+            self.eps = self.compute_knn_kth_distance(
+                self.min_points, eps_for_ratio=True, suppress_warnings=True
+            )
             self.update_eps_slider()
             self.refresh_plot()
             self.toggle_controls(True)
@@ -280,6 +296,9 @@ class ParameterControlDialog(QDialog):
             self.layer_id = None
             self.variable_widget.setSource(None)
             self.toggle_controls(False)
+            self._data_ready = False
+            self.eps = None
+            self._set_data_error(None)
             self.eps_label.setText("Epsilon: Not set")
             self.minpts_label.setText("MinPts: -")
             self.interval_label.setText("Interval: 0 ms")
@@ -289,6 +308,20 @@ class ParameterControlDialog(QDialog):
     # ------------------------------------------------------------------
     def update_eps_slider(self):
         self.eps_slider.blockSignals(True)
+<<<<<<< Updated upstream
+=======
+        if self.eps is None:
+            self.eps_slider.setEnabled(False)
+            self.eps_slider.setMinimum(0)
+            self.eps_slider.setMaximum(0)
+            self.eps_slider.setValue(0)
+            self.eps_slider.blockSignals(False)
+            self.eps_label.setText("Epsilon: Not set")
+            self.update_eps_ratio()
+            return
+
+        self.eps_slider.setEnabled(True)
+>>>>>>> Stashed changes
         self.eps_factor = 1_000_000 if self.eps_max < 1 else 10
         self.eps_slider.setMinimum(int(self.eps_min * self.eps_factor))
         self.eps_slider.setMaximum(int(self.eps_max * self.eps_factor))
@@ -303,7 +336,9 @@ class ParameterControlDialog(QDialog):
             return
         if self.variable_widget.v_type == "attrs":
             self.clear_canvas()
-        self.eps = self.compute_knn_kth_distance(self.min_points)
+        self.eps = self.compute_knn_kth_distance(
+            self.min_points, suppress_warnings=True
+        )
         self.update_eps_slider()
         self.refresh_plot()
         self.set_playing(False)
@@ -312,12 +347,20 @@ class ParameterControlDialog(QDialog):
     def update_minpts(self, value):
         self.min_points = value
         self.minpts_label.setText(f"MinPts: {value}")
-        self.eps = self.compute_knn_kth_distance(self.min_points)
+        self.eps = self.compute_knn_kth_distance(
+            self.min_points, suppress_warnings=True
+        )
         self.update_eps_slider()
         self.refresh_plot()
+        self.set_playing(False)
 
     # ------------------------------------------------------------------
     def update_eps(self, value):
+<<<<<<< Updated upstream
+=======
+        if self.eps is None:
+            return
+>>>>>>> Stashed changes
         self.eps = value / self.eps_factor
         self.eps_label.setText(f"Epsilon: {self.eps:.2f}")
         self.update_eps_ratio()
@@ -325,12 +368,12 @@ class ParameterControlDialog(QDialog):
 
     # ------------------------------------------------------------------
     def update_eps_ratio(self):
-        if self.sorted_knn_dists:
-            count = sum(1 for d in self.sorted_knn_dists if d <= self.eps)
-            ratio = count / len(self.sorted_knn_dists) * 100
-            self.eps_ratio_label.setText(f"{ratio:.0f}% points below epsilon")
-        else:
+        if self.eps is None or not self.sorted_knn_dists:
             self.eps_ratio_label.setText("")
+            return
+        count = sum(1 for d in self.sorted_knn_dists if d <= self.eps)
+        ratio = count / len(self.sorted_knn_dists) * 100
+        self.eps_ratio_label.setText(f"{ratio:.0f}% points below epsilon")
 
     # ------------------------------------------------------------------
     def refresh_plot(self):
@@ -354,13 +397,23 @@ class ParameterControlDialog(QDialog):
         if not self.layer:
             QMessageBox.warning(self, "No Layer", "벡터 레이어를 선택해야 합니다.")
             return
-        clustered_layer = self.build_cluster_layer()
+        if self.eps is None or not self._data_ready:
+            QMessageBox.warning(self, "DBSCAN", "유효한 변수를 선택해 주십시오.")
+            return
+        try:
+            clustered_layer = self.build_cluster_layer()
+        except ValueError as exc:
+            QMessageBox.warning(self, "DBSCAN", str(exc))
+            return
         QgsProject.instance().addMapLayer(clustered_layer)
 
     # ------------------------------------------------------------------
     def play(self):
         if not self.layer:
             QMessageBox.warning(self, "No Layer", "벡터 레이어를 선택해야 합니다.")
+            return
+        if self.eps is None or not self._data_ready:
+            QMessageBox.warning(self, "DBSCAN", "유효한 변수를 선택해 주십시오.")
             return
 
         if not self.animator or self.animator.layer != self.layer or self.animator.index == 0:
@@ -401,12 +454,40 @@ class ParameterControlDialog(QDialog):
             self.layer = None
             self.layer_id = None
             self.toggle_controls(False)
+            self._data_ready = False
+            self.eps = None
+            self._set_data_error(None)
 
     # ------------------------------------------------------------------
     def get_feature_matrix(self):
         feats = list(self.layer.getFeatures())
-        if self.variable_widget.v_type == "attrs" and self.variable_widget.attrs:
-            data = [[f[attr] for attr in self.variable_widget.attrs] for f in feats]
+        if not feats:
+            raise ValueError("레이어에 피처가 없습니다.")
+
+        if self.variable_widget.v_type == "attrs":
+            attrs = self.variable_widget.attrs
+            if not attrs:
+                raise ValueError("하나 이상의 필드를 선택해 주십시오.")
+            valid_feats = []
+            data = []
+            for f in feats:
+                row = []
+                skip_row = False
+                for attr in attrs:
+                    value = f[attr]
+                    if value is None or value == "":
+                        skip_row = True
+                        break
+                    try:
+                        row.append(float(value))
+                    except (TypeError, ValueError):
+                        raise ValueError(f"'{attr}' 필드는 수치형 값이어야 합니다.")
+                if skip_row:
+                    continue
+                valid_feats.append(f)
+                data.append(row)
+            if not data:
+                raise ValueError("선택한 필드에 유효한 값이 없습니다.")
             if self.variable_widget.normalized:
                 cols = list(zip(*data))
                 means = [sum(col) / len(col) for col in cols]
@@ -421,11 +502,25 @@ class ParameterControlDialog(QDialog):
                     ]
                     for row in data
                 ]
-            return feats, data
-        else:
-            points = [f.geometry().asPoint() for f in feats]
-            data = [[pt.x(), pt.y()] for pt in points]
-            return feats, data
+            return valid_feats, data
+
+        valid_feats = []
+        data = []
+        for f in feats:
+            geom = f.geometry()
+            if not geom or geom.isNull() or geom.isEmpty():
+                continue
+            if QgsWkbTypes.geometryType(geom.wkbType()) != QgsWkbTypes.PointGeometry:
+                continue
+            try:
+                point = geom.asPoint()
+            except ValueError:
+                continue
+            valid_feats.append(f)
+            data.append([point.x(), point.y()])
+        if not data:
+            raise ValueError("레이어에 유효한 포인트 지오메트리가 없습니다.")
+        return valid_feats, data
 
     # ------------------------------------------------------------------
     def _euclidean(self, a, b):
@@ -521,8 +616,24 @@ class ParameterControlDialog(QDialog):
         return new_layer
 
     # ------------------------------------------------------------------
-    def compute_knn_kth_distance(self, k, eps_for_ratio=False):
-        feats, data = self.get_feature_matrix()
+    def compute_knn_kth_distance(self, k, eps_for_ratio=False, suppress_warnings=False):
+        try:
+            _, data = self.get_feature_matrix()
+        except ValueError as exc:
+            self._set_data_error(str(exc), push=not suppress_warnings)
+            self._data_ready = False
+            self.sorted_knn_dists = []
+            self.eps_min = 0.0
+            self.eps_max = 0.0
+            return None
+        if len(data) <= k:
+            message = f"유효한 데이터가 MinPts 값({k})보다 적습니다."
+            self._set_data_error(message, push=not suppress_warnings)
+            self._data_ready = False
+            self.sorted_knn_dists = []
+            self.eps_min = 0.0
+            self.eps_max = 0.0
+            return None
         kth_dists = []
         for i, row in enumerate(data):
             dist = sorted(
@@ -538,7 +649,16 @@ class ParameterControlDialog(QDialog):
         if kth_dists:
             self.eps_min = min(kth_dists)
             self.eps_max = max(kth_dists)
-        return sum(kth_dists) / len(kth_dists) if kth_dists else 10.0
+        if not kth_dists:
+            self._set_data_error(
+                "epsilon을 계산할 수 있는 데이터가 부족합니다.",
+                push=not suppress_warnings,
+            )
+            self._data_ready = False
+            return None
+        self._set_data_error(None)
+        self._data_ready = True
+        return sum(kth_dists) / len(kth_dists)
 
     # ------------------------------------------------------------------
     def get_elbow_pixmap(self):
@@ -547,16 +667,29 @@ class ParameterControlDialog(QDialog):
         n = max(len(self.sorted_knn_dists), 1)
         ms = 0.125 * 600 / n
         ms = max(0.1, min(ms, 5.0))
-        ax.scatter(
-            range(1, n + 1),
-            self.sorted_knn_dists,
-            s=ms ** 2,
-            color="black",
-        )
+        if self.sorted_knn_dists:
+            ax.scatter(
+                range(1, n + 1),
+                self.sorted_knn_dists,
+                s=ms ** 2,
+                color="black",
+            )
+        else:
+            ax.text(
+                0.5,
+                0.5,
+                "표시할 데이터가 없습니다.",
+                ha="center",
+                va="center",
+                transform=ax.transAxes,
+                color="gray",
+            )
+            ax.set_xticks([])
+            ax.set_yticks([])
         ax.set_title("k-NN Distance Distribution")
         ax.set_xlabel("Nth Points")
         ax.set_ylabel("k-NN Distance")
-        if self.eps is not None:
+        if self.eps is not None and self.sorted_knn_dists:
             ax.axhline(y=self.eps, color="r", linestyle="--", label=f"epsilon = {self.eps:.2f}")
             ax.legend()
         fig.tight_layout()
@@ -565,3 +698,26 @@ class ParameterControlDialog(QDialog):
         plt.close(fig)
         pix = QPixmap(tmp.name)
         return pix
+
+    # ------------------------------------------------------------------
+    def _set_data_error(self, message, push=True):
+        if not push and message:
+            return
+        if message and message != self._data_error_message:
+            self._pop_message()
+            self._message_widget = iface.messageBar().pushWarning("DBSCAN", message)
+            self._data_error_message = message
+        elif not message:
+            self._pop_message()
+            self._data_error_message = None
+
+    # ------------------------------------------------------------------
+    def _pop_message(self):
+        if not self._message_widget:
+            return
+        bar = iface.messageBar()
+        try:
+            bar.popWidget(self._message_widget)
+        except AttributeError:
+            bar.clearWidgets()
+        self._message_widget = None
