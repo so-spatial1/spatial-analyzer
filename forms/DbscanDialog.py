@@ -56,12 +56,10 @@ class ParameterControlDialog(QDialog):
         self.eps_min = 1.0
         self.eps_max = 10.0
         self.eps_factor = 10
-<<<<<<< Updated upstream
-=======
+
         self._data_ready = False
         self._data_error_message = None
         self._message_widget = None
->>>>>>> Stashed changes
         self.timer_interval = 50
         self.fill_alpha = 50
         self.marker_size = "0.5"
@@ -308,8 +306,6 @@ class ParameterControlDialog(QDialog):
     # ------------------------------------------------------------------
     def update_eps_slider(self):
         self.eps_slider.blockSignals(True)
-<<<<<<< Updated upstream
-=======
         if self.eps is None:
             self.eps_slider.setEnabled(False)
             self.eps_slider.setMinimum(0)
@@ -321,7 +317,6 @@ class ParameterControlDialog(QDialog):
             return
 
         self.eps_slider.setEnabled(True)
->>>>>>> Stashed changes
         self.eps_factor = 1_000_000 if self.eps_max < 1 else 10
         self.eps_slider.setMinimum(int(self.eps_min * self.eps_factor))
         self.eps_slider.setMaximum(int(self.eps_max * self.eps_factor))
@@ -356,11 +351,8 @@ class ParameterControlDialog(QDialog):
 
     # ------------------------------------------------------------------
     def update_eps(self, value):
-<<<<<<< Updated upstream
-=======
         if self.eps is None:
             return
->>>>>>> Stashed changes
         self.eps = value / self.eps_factor
         self.eps_label.setText(f"Epsilon: {self.eps:.2f}")
         self.update_eps_ratio()

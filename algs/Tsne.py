@@ -240,10 +240,7 @@ class Tsne(QgisAlgorithm):
         seed = self.parameterAsInt(parameters, self.SEED, context) if use_seed else None
         show_evolution = self.parameterAsBoolean(parameters, self.SHOW_EVOLUTION, context)
 
-<<<<<<< Updated upstream
         feats = list(layer.getFeatures())
-=======
->>>>>>> Stashed changes
         point_size = 10
         fig_size = (12, 8)
         label_size = 12
@@ -259,14 +256,11 @@ class Tsne(QgisAlgorithm):
         else:
             unique = cat_to_color = colors = None
 
-<<<<<<< Updated upstream
         data = [[f[fld] for fld in fields] for f in feats]
         data = np.array(data, dtype=float)
         n_samples = data.shape[0]
-=======
         n_samples = data.shape[0]
 
->>>>>>> Stashed changes
         if transform == 'standardize':
             meanv = np.mean(data, axis=0)
             stdv = np.std(data, axis=0)
