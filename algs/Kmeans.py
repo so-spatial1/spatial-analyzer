@@ -5,7 +5,7 @@
 SpatialAnalyzer
                               -------------------
         git sha              : $Format:%H$
-        copyright            : (C) 2017 by D.J Paek
+        copyright            : (C) 2018 by D.J Paek
         email                : dj dot paek1 at gmail dot com
  ***************************************************************************/
 
