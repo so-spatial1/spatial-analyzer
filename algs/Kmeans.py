@@ -177,16 +177,13 @@ class Kmeans(QgisAlgorithm):
         features = np.insert(features, 1, label, axis = 1) # add cluster id
         centroids_with_id =  np.insert(centroids.copy(), 0, range(0, k), axis = 1) # add cluster id
 
-        pts = []
-        wss_by_cluster = []
-        for cluster_id in range(0, k):
-            chunk = features[features[:, 1]==cluster_id]
-            distance_squared = np.sum((chunk[:, 2:] - centroids_with_id[cluster_id, 1:])**2, axis=1)
-            chunk = np.insert(chunk, 2, distance_squared, axis=1)
-            pts.append(chunk)
-            wss_by_cluster.append(np.sum(distance_squared))
-        pts = np.vstack(pts)
+        cluster = features[:, 1].astype(int)
+        distances = features[:, 2:] - centroids[cluster, 1:]
+        distance_squared = np.einsum('ij,ij->i', distances, distances)
+        pts = np.insert(features, 2, distance_squared, axis=1)
         pts = pts[np.argsort(pts[:, 0]), :] #re-order by index(1st column)
+
+        wss_by_cluster = np.bincount(cluster, weights=distance_squared, minlength=k)
 
         centroids_scaled = np.insert(centroids.copy(), 0, range(0, k), axis=1)
         centroids_scaled = np.insert(centroids_scaled, 1, wss_by_cluster, axis=1)
