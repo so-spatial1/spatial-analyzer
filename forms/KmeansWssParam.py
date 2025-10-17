@@ -25,11 +25,25 @@
 from qgis.core import QgsProcessingParameterNumber
 
 class ParameterWss(QgsProcessingParameterNumber):
-    def __init__(self, name='', description='', layer_param=None, variable_options=None, default=None, optional=False):
+    def __init__(
+            self,
+            name='',
+            description='',
+            layer_param=None,
+            variable_options=None,
+            backend_param=None,
+            default=None,
+            optional=False):
         QgsProcessingParameterNumber.__init__(self, name, description)
         self.layer_param = layer_param
         self.variable_options = variable_options
+        self.backend_param = backend_param
 
     def clone(self):
-        copy = ParameterWss(self.name(), self.description(), self.layer_param, self.variable_options)
+        copy = ParameterWss(
+            self.name(),
+            self.description(),
+            self.layer_param,
+            self.variable_options,
+            self.backend_param)
         return copy

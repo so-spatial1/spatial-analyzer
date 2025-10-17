@@ -60,6 +60,7 @@ from qgis.core import (QgsWkbTypes,
 from processing.algs.qgis.QgisAlgorithm import QgisAlgorithm
 from spatial_analysis.forms.KmeansWssParam import ParameterWss
 from spatial_analysis.forms.VariableParam import ParameterVariable
+from spatial_analysis.forms.sklearn_utils import has_sklearn, SKLEARN_INSTALL_MESSAGE
 import numpy as np
 from scipy.cluster.vq import kmeans2
 import geopandas as gpd
@@ -70,6 +71,7 @@ pluginPath = os.path.split(os.path.split(os.path.dirname(__file__))[0])[0]
 class Kmeans(QgisAlgorithm):
 
     INPUT = 'INPUT_LAYER'
+    BACKEND = 'BACKEND'
     MINIT = 'MINIT'
     ITER = 'ITER'
     K = 'K'
@@ -109,6 +111,14 @@ class Kmeans(QgisAlgorithm):
         self.addParameter(QgsProcessingParameterFeatureSource(self.INPUT,
                                                               self.tr(u'Input Layer'),
                                                               [QgsProcessing.TypeVector]))
+        backend_param = QgsProcessingParameterEnum(
+            self.BACKEND,
+            self.tr('Backend'),
+            ['SciPy', 'scikit-learn'],
+            defaultValue=0
+        )
+        backend_param.setMetadata({'widget_wrapper': {'class': 'spatial_analysis.forms.KmeansBackendSelector.BackendSelectorWrapper'}})
+        self.addParameter(backend_param)
         variable_param = ParameterVariable(self.V_OPTIONS, self.tr(u'Variable Fields'), layer_param=self.INPUT)
         variable_param.setMetadata({'widget_wrapper': {'class': 'spatial_analysis.forms.VariableWidget.VariableWidgetWrapper'}})
         self.addParameter(variable_param)
@@ -125,7 +135,12 @@ class Kmeans(QgisAlgorithm):
                                                        self.tr(u'Number of Clusters(K)'),
                                                        QgsProcessingParameterNumber.Integer,
                                                        3, False, 2, 99999999))
-        wss_param = ParameterWss(self.WSS, self.tr('<hr> '), layer_param=self.INPUT, variable_options=self.V_OPTIONS)
+        wss_param = ParameterWss(
+            self.WSS,
+            self.tr('<hr> '),
+            layer_param=self.INPUT,
+            variable_options=self.V_OPTIONS,
+            backend_param=self.BACKEND)
         wss_param.setMetadata({'widget_wrapper': {'class': 'spatial_analysis.forms.KmeansWss.WssWidgetWrapper'}})
         self.addParameter(wss_param)
         self.addParameter(QgsProcessingParameterFeatureSink(self.OUTPUT, 
@@ -141,6 +156,13 @@ class Kmeans(QgisAlgorithm):
         # input parameters
         cLayer = self.parameterAsSource(parameters, self.INPUT, context)
         to_cluster, variable_fields, normalized = self.parameterAsMatrix(parameters, self.V_OPTIONS, context)
+        backend_idx = self.parameterAsEnum(parameters, self.BACKEND, context)
+        backend_choice = 'sklearn' if backend_idx == 1 else 'scipy'
+        sklearn_available = has_sklearn()
+        if not sklearn_available:
+            feedback.pushInfo(SKLEARN_INSTALL_MESSAGE)
+        if backend_choice == 'sklearn' and not sklearn_available:
+            backend_choice = 'scipy'
         minit_idx = self.parameterAsEnum(parameters, self.MINIT, context)
         iter = self.parameterAsInt(parameters, self.ITER, context)
         k = self.parameterAsInt(parameters, self.K, context)
@@ -170,28 +192,26 @@ class Kmeans(QgisAlgorithm):
             features = raw_features.copy()
             if_normalized = "No"
         total_ss = np.sum((features - np.mean(features, axis = 0))**2)
-        features = np.insert(features, 0, range(0, feat_count), axis = 1) # add index
+        indices = np.arange(feat_count, dtype=int)
 
-        # k means clustering
-        centroids, label = kmeans2(features[:, 1:], k, iter, minit=self.minit_name[1][minit_idx])
-        features = np.insert(features, 1, label, axis = 1) # add cluster id
-        centroids_with_id =  np.insert(centroids.copy(), 0, range(0, k), axis = 1) # add cluster id
+        if backend_choice == 'scipy':
+            centroids, label = kmeans2(features, k, iter, minit=self.minit_name[1][minit_idx])
+        else:
+            centroids, label = self._run_sklearn_kmeans(features, k, iter, self.minit_name[1][minit_idx])
 
-        cluster = features[:, 1].astype(int)
-        distances = features[:, 2:] - centroids[cluster, 1:]
+        label = label.astype(int)
+        distances = features - centroids[label]
         distance_squared = np.einsum('ij,ij->i', distances, distances)
-        pts = np.insert(features, 2, distance_squared, axis=1)
-        pts = pts[np.argsort(pts[:, 0]), :] #re-order by index(1st column)
+        pts = np.column_stack((indices, label, distance_squared, features))
+        pts = pts[np.argsort(pts[:, 0]), :]
 
-        wss_by_cluster = np.bincount(cluster, weights=distance_squared, minlength=k)
+        wss_by_cluster = np.bincount(label, weights=distance_squared, minlength=k)
 
-        centroids_scaled = np.insert(centroids.copy(), 0, range(0, k), axis=1)
-        centroids_scaled = np.insert(centroids_scaled, 1, wss_by_cluster, axis=1)
+        centroids_scaled = np.column_stack((np.arange(k), wss_by_cluster, centroids))
         centroids_original_vals = centroids * scale
-        centroids_original = np.insert(centroids_original_vals, 0, range(0, k), axis=1)
-        centroids_original = np.insert(centroids_original, 1, wss_by_cluster, axis=1)
-        cluster = pts[:,1]
-        distance = pts[:,2]
+        centroids_original = np.column_stack((np.arange(k), wss_by_cluster, centroids_original_vals))
+        cluster = pts[:, 1]
+        distance = pts[:, 2]
         
         feedback.pushInfo("End of Algorithm")
         feedback.pushInfo("Building Layers")
@@ -341,4 +361,37 @@ class Kmeans(QgisAlgorithm):
         results[self.OUTPUT] = cluster_dest_id
         results[self.OUTPUT_CENTROID] = centroid_dest_id
         results[self.OUTPUT_REPORT] = output_report
-        return results		
+        return results
+
+    def _run_sklearn_kmeans(self, features, k, max_iter, init_key):
+        try:
+            from sklearn.cluster import KMeans  # type: ignore
+        except Exception as exc:  # pragma: no cover - optional dependency
+            raise QgsProcessingException(
+                self.tr('scikit-learn backend is unavailable: {}').format(exc)
+            )
+
+        if init_key == '++':
+            init_param = 'k-means++'
+            n_init = 20
+        elif init_key == 'random':
+            init_param = 'random'
+            n_init = 20
+        else:
+            if features.shape[0] < k:
+                init_points = features.copy()
+            else:
+                init_indices = np.random.choice(features.shape[0], k, replace=False)
+                init_points = features[init_indices]
+            init_param = init_points
+            n_init = 1
+
+        model = KMeans(
+            n_clusters=k,
+            init=init_param,
+            n_init=n_init,
+            max_iter=max_iter
+        )
+        labels = model.fit_predict(features)
+        centroids = model.cluster_centers_
+        return centroids, labels

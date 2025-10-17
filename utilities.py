@@ -128,3 +128,45 @@ def getCentralFeature(x, y, weights, id, dMetricIndex):
         return centerFeat
     except (IndexError, ZeroDivisionError, TypeError, ValueError) as exc:
         raise ValueError("Failed to compute central feature") from exc
+
+
+def compute_silhouette_coefficient(features, labels):
+    """Compute the mean silhouette coefficient for clustering results."""
+    features = np.asarray(features, dtype=float)
+    labels = np.asarray(labels)
+
+    if features.ndim != 2 or features.shape[0] < 2:
+        return np.nan
+
+    unique_labels = np.unique(labels)
+    if unique_labels.size <= 1:
+        return np.nan
+
+    distance_matrix = squareform(pdist(features, metric='euclidean'))
+    silhouettes = np.zeros(features.shape[0], dtype=float)
+
+    for cluster_id in unique_labels:
+        mask = labels == cluster_id
+        cluster_size = np.sum(mask)
+        if cluster_size == 0:
+            continue
+        if cluster_size == 1:
+            intra_dist = np.zeros(1, dtype=float)
+        else:
+            intra_sum = np.sum(distance_matrix[np.ix_(mask, mask)], axis=1)
+            intra_dist = intra_sum / (cluster_size - 1)
+
+        inter_dist = np.full(cluster_size, np.inf, dtype=float)
+        for other_id in unique_labels:
+            if other_id == cluster_id:
+                continue
+            other_mask = labels == other_id
+            if not np.any(other_mask):
+                continue
+            mean_dist = np.mean(distance_matrix[np.ix_(mask, other_mask)], axis=1)
+            inter_dist = np.minimum(inter_dist, mean_dist)
+
+        denom = np.maximum(intra_dist, inter_dist)
+        silhouettes[mask] = np.where(denom > 0, (inter_dist - intra_dist) / denom, 0.0)
+
+    return float(np.mean(silhouettes))
