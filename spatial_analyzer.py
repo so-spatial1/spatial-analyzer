@@ -26,7 +26,7 @@ import xml.etree.ElementTree as ET
 
 from spatial_analysis.spatial_provider import SpatialProvider
 from qgis.core import QgsApplication
-from qgis.PyQt.QtCore import QTranslator, QLocale, QCoreApplication
+from qgis.PyQt.QtCore import QTranslator, QLocale, QCoreApplication, QSettings
 
 
 class _DictionaryTranslator(QTranslator):
@@ -60,7 +60,17 @@ class SpatialAnalyzer:
             self._translator = None
 
     def _install_translator(self):
-        locale_name = QLocale.system().name().lower()
+        settings = QSettings()
+        override_locale = settings.value('locale/overrideFlag', False, type=bool)
+        if override_locale:
+            locale_name = settings.value('locale/userLocale', '', type=str)
+        else:
+            locale_name = QLocale.system().name()
+
+        if not locale_name:
+            return
+
+        locale_name = locale_name.lower()
         if not locale_name.startswith('ko'):
             return
 

@@ -122,27 +122,27 @@ class SampleFileAlgorithm(QgsProcessingAlgorithm):
 class SpatialProvider(QgsProcessingProvider):
     def __init__(self):
         super().__init__()
-        self.alglist = [
-            CentralTendency.CentralTendency(),
-            MeanCenterTracker.MeanCenterTracker(),
-            MedianCenterTracker.MedianCenterTracker(),
-            CentralFeatureTracker.CentralFeatureTracker(),
-            StandardDistance.StandardDistance(),
-            StandardDeviationEllipse.StandardDeviationEllipse(),
-            Gravity.Gravity(),
-            Kmeans.Kmeans(),
-            Hierarchical.Hierarchical(),
-            Dbscan.Dbscan(),
-            Hotspot.Hotspot(),
-            LocalMoransI.LocalMoransI(),
-            SpatialRegression.SpatialRegression(),
-            GeographicallyWeightedRegression.GeographicallyWeightedRegression(),
-            Pca.Pca(),
-            Tsne.Tsne()
+        self._algorithm_factories = [
+            CentralTendency.CentralTendency,
+            MeanCenterTracker.MeanCenterTracker,
+            MedianCenterTracker.MedianCenterTracker,
+            CentralFeatureTracker.CentralFeatureTracker,
+            StandardDistance.StandardDistance,
+            StandardDeviationEllipse.StandardDeviationEllipse,
+            Gravity.Gravity,
+            Kmeans.Kmeans,
+            Hierarchical.Hierarchical,
+            Dbscan.Dbscan,
+            Hotspot.Hotspot,
+            LocalMoransI.LocalMoransI,
+            SpatialRegression.SpatialRegression,
+            GeographicallyWeightedRegression.GeographicallyWeightedRegression,
+            Pca.Pca,
+            Tsne.Tsne,
         ]
         
     def getAlgs(self):
-        return self.alglist
+        return [factory() for factory in self._algorithm_factories]
 
     def id(self, *args, **kwargs):
         return 'spatialAnalyzer'
@@ -157,8 +157,8 @@ class SpatialProvider(QgsProcessingProvider):
         return os.path.join(pluginPath, 'spatial_analysis', 'icon.svg')
 
     def loadAlgorithms(self, *args, **kwargs):
-        for alg in self.alglist:
-            self.addAlgorithm(alg)
+        for factory in self._algorithm_factories:
+            self.addAlgorithm(factory())
         self._loadSampleDataAlgorithms()
 
     def _loadSampleDataAlgorithms(self):
