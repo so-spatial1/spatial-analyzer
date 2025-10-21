@@ -47,7 +47,7 @@ from PyQt5.QtCore import QDate
 from qgis.PyQt.QtWidgets import QVBoxLayout
 from qgis.PyQt.QtWebKit import QWebSettings
 from qgis.PyQt.QtWebKitWidgets import QWebView
-from qgis.PyQt.QtCore import QUrl, Qt
+from qgis.PyQt.QtCore import QUrl, Qt, QCoreApplication
 from qgis.PyQt.QtGui import QDesktopServices
 from PyQt5.QtWidgets import QMessageBox
 
@@ -186,12 +186,15 @@ class WssWidget(BASE, WIDGET):
         diff = np.diff(wss)
         diff = np.append(0, -diff)
         diff_ratio = diff / wss[0] * 100
-        diff_ratio = [("%0.1f"%i+"%") for i in diff_ratio]
+        diff_ratio = [
+            self.tr('{value:.1f}%').format(value=i)
+            for i in diff_ratio
+        ]
 
         #그래프
         x_range = [i for i in range(1, maxK+1)]
         x_axis = {
-            'title': 'Clusters(K)',
+            'title': self.tr('Clusters (K)'),
             'dtick': 1,
             'side': 'bottom',
             'color': 'gray',
@@ -215,7 +218,13 @@ class WssWidget(BASE, WIDGET):
             'visible': False,
             'mirror':False
         }
-        wssHover = ['K = ' + str(k) + '<br>' + 'WSS = ' + '{0:,.0f}'.format(w) for k, w in zip(x_range, wss)]
+        wssHover = [
+            self.tr('K = {cluster}<br>WSS = {wss}').format(
+                cluster=k,
+                wss='{0:,.0f}'.format(w)
+            )
+            for k, w in zip(x_range, wss)
+        ]
         
         trace0 = go.Scatter(
             x=x_range[1:],
@@ -226,7 +235,7 @@ class WssWidget(BASE, WIDGET):
             marker=dict(color='white', size=10, line=dict(color='orange', width=2)),
             textposition='top center',
             hoverinfo='text',
-            name='WSS'
+            name=self.tr('WSS')
         )
         trace1 = go.Bar(
             x=x_range[1:],
@@ -235,7 +244,7 @@ class WssWidget(BASE, WIDGET):
             hoverinfo='none',
             marker=dict(color='white', line=dict(width=1, color='gray')),
             textposition='outside',
-            name='ΔWSS÷TSS'
+            name=self.tr('ΔWSS÷TSS')
         )
 
         data = [trace0, trace1]
@@ -250,13 +259,12 @@ class WssWidget(BASE, WIDGET):
             'margin': dict(l=0, r=0, t=15, b=45)
         }
         self.fig = {'data' : data, 'layout' : layout}
-        msg = 'Success'
-        return msg
+        return None
         
     def plotView(self):
         msg = self.getWss()
-        if  msg != 'Success':
-            QMessageBox.information(self, u"Input Error", msg)
+        if msg:
+            QMessageBox.information(self, self.tr('Input Error'), msg)
         else:
             plot_path = self._create_plot_file_with_table()
             if plot_path:
@@ -268,8 +276,8 @@ class WssWidget(BASE, WIDGET):
 
     def browserVeiw(self):
         msg = self.getWss()
-        if  msg != 'Success':
-            QMessageBox.information(self, u"Input Error", msg)
+        if msg:
+            QMessageBox.information(self, self.tr('Input Error'), msg)
         else:
             plot_path = self._create_plot_file_with_table()
             if plot_path:
@@ -407,7 +415,11 @@ class WssWidget(BASE, WIDGET):
 
     def _log_missing_sklearn(self):
         if not getattr(self, '_sklearn_message_logged', False):
-            QgsMessageLog.logMessage(SKLEARN_INSTALL_MESSAGE, 'SpatialAnalysis', Qgis.Info)
+            QgsMessageLog.logMessage(
+                QCoreApplication.translate('sklearn_utils', SKLEARN_INSTALL_MESSAGE),
+                'SpatialAnalysis',
+                Qgis.Info
+            )
             self._sklearn_message_logged = True
 
     def _silhouette_for_labels(self, labels, pairwise):
@@ -532,6 +544,9 @@ class WssWidget(BASE, WIDGET):
 
         header_cells = []
         value_cells = []
+        na_text = self.tr('N/A')
+        k_header = self.tr('K')
+        silhouette_header = self.tr('Silhouette')
         for idx, (k, score) in enumerate(column_entries):
             style = "font-weight:bold;" if idx in best_indices else ""
             header_cells.append(
@@ -539,7 +554,7 @@ class WssWidget(BASE, WIDGET):
                 f"{k}</th>"
             )
             if score is None:
-                display = "N/A"
+                display = na_text
             else:
                 display = f"{score:.3f}"
             value_cells.append(
@@ -547,8 +562,20 @@ class WssWidget(BASE, WIDGET):
                 f"{display}</td>"
             )
         table_rows = [
-            "<tr><th style='border:1px solid #ccc; padding:6px 8px;'>K</th>" + "".join(header_cells) + "</tr>",
-            "<tr><th style='border:1px solid #ccc; padding:6px 8px;'>Silhouette</th>" + "".join(value_cells) + "</tr>",
+            (
+                "<tr><th style='border:1px solid #ccc; padding:6px 8px;'>"
+                + k_header
+                + "</th>"
+                + "".join(header_cells)
+                + "</tr>"
+            ),
+            (
+                "<tr><th style='border:1px solid #ccc; padding:6px 8px;'>"
+                + silhouette_header
+                + "</th>"
+                + "".join(value_cells)
+                + "</tr>"
+            ),
         ]
         table_html = (
             "<table class='silhouette-table' "
@@ -614,7 +641,11 @@ class WssWidget(BASE, WIDGET):
                     f.write(html)
             return plot_path
         except Exception:
-            QgsMessageLog.logMessage('Failed to create silhouette table view.', 'SpatialAnalysis', Qgis.Warning)
+            QgsMessageLog.logMessage(
+                self.tr('Failed to create silhouette table view.'),
+                'SpatialAnalysis',
+                Qgis.Warning
+            )
             return None
 
     def _silhouette_table_html_with_style(self):

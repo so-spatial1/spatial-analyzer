@@ -30,7 +30,7 @@ __revision__ = '$Format:%H$'
 import os
 import codecs
 
-from qgis.PyQt.QtCore import QVariant, QUrl
+from qgis.PyQt.QtCore import QVariant, QUrl, QCoreApplication
 from qgis.PyQt.QtGui import QIcon, QColor
 from qgis.PyQt.QtWebKitWidgets import QWebView
 
@@ -114,7 +114,7 @@ class Kmeans(QgisAlgorithm):
         backend_param = QgsProcessingParameterEnum(
             self.BACKEND,
             self.tr('Backend'),
-            ['SciPy', 'scikit-learn'],
+            [self.tr('SciPy'), self.tr('scikit-learn')],
             defaultValue=0
         )
         backend_param.setMetadata({'widget_wrapper': {'class': 'spatial_analysis.forms.KmeansBackendSelector.BackendSelectorWrapper'}})
@@ -122,7 +122,7 @@ class Kmeans(QgisAlgorithm):
         variable_param = ParameterVariable(self.V_OPTIONS, self.tr(u'Variable Fields'), layer_param=self.INPUT)
         variable_param.setMetadata({'widget_wrapper': {'class': 'spatial_analysis.forms.VariableWidget.VariableWidgetWrapper'}})
         self.addParameter(variable_param)
-        self.minit_name=[['KMeans++', 'Random', 'Points'], ['++', 'random', 'points']]
+        self.minit_name=[[self.tr('KMeans++'), self.tr('Random'), self.tr('Points')], ['++', 'random', 'points']]
         self.addParameter(QgsProcessingParameterEnum(self.MINIT,
                                                      self.tr(u'Initialization Method'),
                                                      defaultValue  = 0,
@@ -160,7 +160,9 @@ class Kmeans(QgisAlgorithm):
         backend_choice = 'sklearn' if backend_idx == 1 else 'scipy'
         sklearn_available = has_sklearn()
         if not sklearn_available:
-            feedback.pushInfo(SKLEARN_INSTALL_MESSAGE)
+            feedback.pushInfo(
+                QCoreApplication.translate('sklearn_utils', SKLEARN_INSTALL_MESSAGE)
+            )
         if backend_choice == 'sklearn' and not sklearn_available:
             backend_choice = 'scipy'
         minit_idx = self.parameterAsEnum(parameters, self.MINIT, context)
@@ -172,7 +174,9 @@ class Kmeans(QgisAlgorithm):
             k = feat_count
         if to_cluster == 'attrs' and not variable_fields:
             raise QgsProcessingException(self.tr(u'No Fields Selected.'))
-        feedback.pushInfo(self.tr("Starting Algorithm: '{}'".format(self.displayName())))
+        feedback.pushInfo(
+            self.tr("Starting Algorithm: '{name}'").format(name=self.displayName())
+        )
 
         # input --> numpy array
         if to_cluster == 'geom':
@@ -186,11 +190,11 @@ class Kmeans(QgisAlgorithm):
             scale = np.std(raw_features, axis=0)
             scale[scale == 0] = 1.0
             features = raw_features / scale
-            if_normalized = "Yes"
+            if_normalized = self.tr('Yes')
         else:
             scale = np.ones(raw_features.shape[1], dtype=float)
             features = raw_features.copy()
-            if_normalized = "No"
+            if_normalized = self.tr('No')
         total_ss = np.sum((features - np.mean(features, axis = 0))**2)
         indices = np.arange(feat_count, dtype=int)
 
@@ -213,8 +217,8 @@ class Kmeans(QgisAlgorithm):
         cluster = pts[:, 1]
         distance = pts[:, 2]
         
-        feedback.pushInfo("End of Algorithm")
-        feedback.pushInfo("Building Layers")
+        feedback.pushInfo(self.tr('End of Algorithm'))
+        feedback.pushInfo(self.tr('Building Layers'))
 	
         # cluster layer
         cluster_colors = [QColor.fromHsv(int(360 * i / max(1, k)), 255, 200) for i in range(k)]
@@ -233,7 +237,7 @@ class Kmeans(QgisAlgorithm):
             cluster_sink.addFeature(outFeat, QgsFeatureSink.FastInsert)
             feedback.setProgress(int(i / feat_count * 100))
         feedback.setProgress(0)
-        feedback.pushInfo("Done with Cluster Layer")
+        feedback.pushInfo(self.tr('Done with Cluster Layer'))
 
         cluster_layer = QgsProcessingUtils.mapLayerFromString(cluster_dest_id, context)
         cluster_geom_type = cluster_layer.geometryType()
@@ -321,14 +325,18 @@ class Kmeans(QgisAlgorithm):
             f.write('<html><head>\n')
             f.write('<meta http-equiv="Content-Type" content="text/html; \
                     charset=utf-8" /></head><body>\n')
-            f.write('<p> Number of clusters: ' + str(k) + '</p>\n')
-            f.write('<p> Initialization Method: ' + self.minit_name[0][minit_idx] + '</p>\n')
-            f.write('<p> Number of iterations: ' + str(iter) + '</p>\n')
-            f.write('<p> Normalized: ' + if_normalized + '</p>\n')
-            f.write('<p> The total sum of squares: ' + str(total_ss) + '</p>\n')
-            f.write('<p> The within cluster sum of squares: ' + str(total_wss) + '</p>\n')
-            f.write('<p> The between cluster sum of squares: ' + str(total_ss-total_wss) + '</p>\n')
-            f.write('<p> The ratio of between to total sum of squares: ' + str((total_ss-total_wss) / total_ss * 100) + '%</p>\n')
+            f.write('<p>' + self.tr('Number of clusters: {count}').format(count=k) + '</p>\n')
+            f.write('<p>' + self.tr('Initialization Method: {method}').format(
+                method=self.minit_name[0][minit_idx]
+            ) + '</p>\n')
+            f.write('<p>' + self.tr('Number of iterations: {count}').format(count=iter) + '</p>\n')
+            f.write('<p>' + self.tr('Normalized: {value}').format(value=if_normalized) + '</p>\n')
+            f.write('<p>' + self.tr('The total sum of squares: {value}').format(value=total_ss) + '</p>\n')
+            f.write('<p>' + self.tr('The within cluster sum of squares: {value}').format(value=total_wss) + '</p>\n')
+            f.write('<p>' + self.tr('The between cluster sum of squares: {value}').format(value=total_ss-total_wss) + '</p>\n')
+            f.write('<p>' + self.tr('The ratio of between to total sum of squares: {value}%').format(
+                value=(total_ss-total_wss) / total_ss * 100
+            ) + '</p>\n')
             # start of table
             
             cols = ['X', 'Y'] if to_cluster == 'geom' else variable_fields
@@ -338,8 +346,8 @@ class Kmeans(QgisAlgorithm):
                 f.write('<table cellpadding="0" cellspacing="1" bgcolor="#ffffff" style="background-color: rgb(204, 204, 204);">')
                 f.write('<tbody>')
                 f.write('<tr style="">')
-                f.write(td_blue + 'Cluster Centers' + '</span></div></td>')
-                f.write(td_blue + 'WSS' + '</span></div></td>')
+                f.write(td_blue + self.tr('Cluster Centers') + '</span></div></td>')
+                f.write(td_blue + self.tr('WSS') + '</span></div></td>')
                 for c in cols:
                     f.write(td_blue + str(c) + '</span></div></td>')
                 for centroid in centroid_rows:
@@ -350,10 +358,10 @@ class Kmeans(QgisAlgorithm):
                 f.write('</tbody></table>')
 
             if normalized:
-                write_centroid_table('Cluster Centers (Standardized)', centroids_scaled)
-                write_centroid_table('Cluster Centers (Original Units)', centroids_original)
+                write_centroid_table(self.tr('Cluster Centers (Standardized)'), centroids_scaled)
+                write_centroid_table(self.tr('Cluster Centers (Original Units)'), centroids_original)
             else:
-                write_centroid_table('Cluster Centers', centroids_original)
+                write_centroid_table(self.tr('Cluster Centers'), centroids_original)
 
             f.write('</body></html>\n')
 

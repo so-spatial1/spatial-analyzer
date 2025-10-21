@@ -31,8 +31,8 @@ class BackendSelectorWidget(QWidget):
 
         self.button_group = QButtonGroup(self)
 
-        self.scipy_radio = QRadioButton('SciPy')
-        self.sklearn_radio = QRadioButton('scikit-learn')
+        self.scipy_radio = QRadioButton(self.tr('SciPy'))
+        self.sklearn_radio = QRadioButton(self.tr('scikit-learn'))
 
         self.button_group.addButton(self.scipy_radio, 0)
         self.button_group.addButton(self.sklearn_radio, 1)

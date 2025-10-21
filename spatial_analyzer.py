@@ -21,11 +21,33 @@
  *                                                                         *
  ***************************************************************************/
 """
+import os
+import xml.etree.ElementTree as ET
+
 from spatial_analysis.spatial_provider import SpatialProvider
 from qgis.core import QgsApplication
+from qgis.PyQt.QtCore import QTranslator, QLocale, QCoreApplication
+
+
+class _DictionaryTranslator(QTranslator):
+    """Simple translator that serves strings from an in-memory dictionary."""
+
+    def __init__(self, mapping):
+        super().__init__()
+        self._mapping = mapping
+
+    def translate(self, context, sourceText, disambiguation=None, n=-1):  # noqa: N802 - Qt API
+        if not sourceText:
+            return ''
+        context_map = self._mapping.get(context, {})
+        translation = context_map.get(sourceText)
+        return translation if translation is not None else ''
+
 
 class SpatialAnalyzer:
     def __init__(self, iface):
+        self._translator = None
+        self._install_translator()
         self.provider = SpatialProvider()
 
     def initGui(self):
@@ -33,3 +55,64 @@ class SpatialAnalyzer:
 
     def unload(self):
         QgsApplication.processingRegistry().removeProvider(self.provider)
+        if self._translator is not None:
+            QCoreApplication.removeTranslator(self._translator)
+            self._translator = None
+
+    def _install_translator(self):
+        locale_name = QLocale.system().name().lower()
+        if not locale_name.startswith('ko'):
+            return
+
+        plugin_dir = os.path.dirname(__file__)
+        i18n_dir = os.path.join(plugin_dir, 'i18n')
+        translator = QTranslator()
+
+        candidates = [
+            f'spatial_analysis_{locale_name}',
+            'spatial_analysis_ko',
+        ]
+
+        for candidate in candidates:
+            if translator.load(candidate, i18n_dir):
+                QCoreApplication.installTranslator(translator)
+                self._translator = translator
+                return
+
+        ts_path = os.path.join(i18n_dir, 'spatial_analysis_ko.ts')
+        dict_translator = self._load_ts_translator(ts_path)
+        if dict_translator is not None:
+            QCoreApplication.installTranslator(dict_translator)
+            self._translator = dict_translator
+
+    def _load_ts_translator(self, ts_path):
+        if not os.path.exists(ts_path):
+            return None
+
+        try:
+            tree = ET.parse(ts_path)
+        except (ET.ParseError, OSError):
+            return None
+
+        mapping = {}
+        for context_elem in tree.findall('context'):
+            context_name = context_elem.findtext('name')
+            if not context_name:
+                continue
+            entries = {}
+            for message in context_elem.findall('message'):
+                source_text = message.findtext('source')
+                translation_elem = message.find('translation')
+                if not source_text or translation_elem is None:
+                    continue
+                if translation_elem.get('type') == 'unfinished':
+                    continue
+                translated_text = translation_elem.text or ''
+                entries[source_text] = translated_text
+            if entries:
+                mapping[context_name] = entries
+
+        if not mapping:
+            return None
+
+        return _DictionaryTranslator(mapping)
