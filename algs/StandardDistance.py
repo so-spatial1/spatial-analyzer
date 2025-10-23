@@ -50,6 +50,7 @@ from qgis.core import (QgsExpression,
 from processing.algs.qgis.QgisAlgorithm import QgisAlgorithm
 import numpy as np
 from math import degrees, radians, sqrt, pow, sin, cos, atan, pi
+from ..locale_utils import localized_menu_text
 
 pluginPath = os.path.split(os.path.split(os.path.dirname(__file__))[0])[0]
 
@@ -66,7 +67,7 @@ class StandardDistance(QgisAlgorithm):
         return QIcon(os.path.join(pluginPath, 'spatial_analysis', 'icons', 'sdd.svg'))
 
     def group(self):
-        return self.tr('Spatial Dispersion')
+        return localized_menu_text('Spatial Dispersion', self.tr('Spatial Dispersion'))
 
     def groupId(self):
         return 'spatialdispersion'
@@ -75,7 +76,7 @@ class StandardDistance(QgisAlgorithm):
         return 'standarddistance'
 
     def displayName(self):
-        return self.tr('Standard Distance')
+        return localized_menu_text('Spatial Dispersion', self.tr('Spatial Dispersion'))
     
     def msg(self, var):
         return "Type:"+str(type(var))+" repr: "+var.__str__()

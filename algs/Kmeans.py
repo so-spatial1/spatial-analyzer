@@ -64,6 +64,7 @@ from spatial_analysis.forms.sklearn_utils import has_sklearn, SKLEARN_INSTALL_ME
 import numpy as np
 from scipy.cluster.vq import kmeans2
 import geopandas as gpd
+from ..locale_utils import localized_menu_text
 
 pluginPath = os.path.split(os.path.split(os.path.dirname(__file__))[0])[0]
 
@@ -86,7 +87,7 @@ class Kmeans(QgisAlgorithm):
         return QIcon(os.path.join(pluginPath, 'spatial_analysis', 'icons', 'cluster.svg'))
 
     def group(self):
-        return self.tr('Clustering')
+        return localized_menu_text('Clustering', self.tr('Clustering'))
 
     def groupId(self):
         return 'clustering'
@@ -95,12 +96,8 @@ class Kmeans(QgisAlgorithm):
         return 'kmeans'
 
     def displayName(self):
-        return self.tr('K-Means')
+        return localized_menu_text('K-Means', self.tr('K-Means'))
 
-    """
-    def shortHelpString(self):
-        return self.tr("Example <br> script with a custom widget")
-    """
     def msg(self, var):
         return "Type:"+str(type(var))+" repr: "+var.__str__()
 

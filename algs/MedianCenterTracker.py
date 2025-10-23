@@ -45,6 +45,7 @@ from qgis.core import (QgsExpression,
 from processing.algs.qgis.QgisAlgorithm import QgisAlgorithm
 from ..utilities import getMedianCenter
 from ..utilities import getPointCoords
+from ..locale_utils import localized_menu_text
 
 pluginPath = os.path.split(os.path.split(os.path.dirname(__file__))[0])[0]
 
@@ -61,7 +62,7 @@ class MedianCenterTracker(QgisAlgorithm):
         return QIcon(os.path.join(pluginPath, 'spatial_analysis', 'icons', 'tracker.svg'))
 
     def group(self):
-        return self.tr('Spatial Central Tendency')
+        return localized_menu_text('Spatial Central Tendency', self.tr('Spatial Central Tendency'))
 
     def groupId(self):
         return 'centraltendency'
@@ -70,7 +71,7 @@ class MedianCenterTracker(QgisAlgorithm):
         return 'mediancentertracker'
 
     def displayName(self):
-        return self.tr(u'Median Center Tracker')
+        return localized_menu_text('Spatial Central Tendency', self.tr('Spatial Central Tendency'))
     
     def msg(self, var):
         return "Type:"+str(type(var))+" repr: "+var.__str__()

@@ -56,6 +56,7 @@ try:  # pragma: no cover - library might be missing
     from spreg import OLS, ML_Lag, ML_Error
 except Exception:  # pragma: no cover - runtime import
     OLS = ML_Lag = ML_Error = None
+from ..locale_utils import localized_menu_text
 
 pluginPath = os.path.split(os.path.split(os.path.dirname(__file__))[0])[0]
 
@@ -75,7 +76,7 @@ class SpatialRegression(QgisAlgorithm):
         return QIcon(os.path.join(pluginPath, 'spatial_analysis', 'icons', 'regression.svg'))
 
     def group(self):
-        return self.tr('Spatial Regression')
+        return localized_menu_text('Spatial Regression', self.tr('Spatial Regression'))
 
     def groupId(self):
         return 'spatialregression'
@@ -84,7 +85,7 @@ class SpatialRegression(QgisAlgorithm):
         return 'spatialregression'
 
     def displayName(self):
-        return self.tr('Spatial Regression')
+        return localized_menu_text('Spatial Regression', self.tr('Spatial Regression'))
 
     def __init__(self):
         super().__init__()

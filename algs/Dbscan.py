@@ -31,6 +31,7 @@ import os
 from qgis.PyQt.QtGui import QIcon
 from processing.algs.qgis.QgisAlgorithm import QgisAlgorithm
 from spatial_analysis.forms.DbscanDialog import ParameterControlDialog
+from ..locale_utils import localized_menu_text
 
 pluginPath = os.path.split(os.path.split(os.path.dirname(__file__))[0])[0]
 
@@ -41,7 +42,7 @@ class Dbscan(QgisAlgorithm):
         return QIcon(os.path.join(pluginPath, 'spatial_analysis', 'icons', 'cluster.svg'))
 
     def group(self):
-        return self.tr('Clustering')
+        return localized_menu_text('Clustering', self.tr('Clustering'))
 
     def groupId(self):
         return 'clustering'
@@ -50,7 +51,7 @@ class Dbscan(QgisAlgorithm):
         return 'dbscan'
 
     def displayName(self):
-        return self.tr('DBSCAN')
+        return localized_menu_text('DBSCAN', self.tr('DBSCAN'))
     
     def msg(self, var):
         return "Type:"+str(type(var))+" repr: "+var.__str__()

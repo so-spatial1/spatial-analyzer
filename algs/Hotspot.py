@@ -52,6 +52,7 @@ from qgis.core import (
 )
 
 from processing.algs.qgis.QgisAlgorithm import QgisAlgorithm
+from ..locale_utils import localized_menu_text
 
 # pysal modules - these may not be available in all environments
 try:
@@ -77,7 +78,7 @@ class Hotspot(QgisAlgorithm):
         return QIcon(os.path.join(pluginPath, 'spatial_analysis', 'icons', 'hotspot.svg'))
 
     def group(self):
-        return self.tr('Hot Spot Analysis')
+        return localized_menu_text('Spatial Autocorrelation', self.tr('Spatial Autocorrelation'))
 
     def groupId(self):
         return 'hotspotanalysis'
@@ -86,7 +87,7 @@ class Hotspot(QgisAlgorithm):
         return 'hotspot'
 
     def displayName(self):
-        return self.tr('Hot Spot Analysis (Gi*)')
+        return localized_menu_text('Gi*', self.tr('Gi*'))
 
     def __init__(self):
         super().__init__()

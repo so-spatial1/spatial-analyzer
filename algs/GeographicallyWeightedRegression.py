@@ -51,6 +51,7 @@ from qgis.core import (
     QgsProject,
 )
 from processing.algs.qgis.QgisAlgorithm import QgisAlgorithm
+from ..locale_utils import localized_menu_text
 
 pluginPath = os.path.split(os.path.split(os.path.dirname(__file__))[0])[0]
 
@@ -85,7 +86,7 @@ class GeographicallyWeightedRegression(QgisAlgorithm):
         return QIcon(os.path.join(pluginPath, 'spatial_analysis', 'icons', 'regression.svg'))
 
     def group(self):
-        return self.tr('Spatial Regression')
+        return localized_menu_text('Spatial Regression', self.tr('Spatial Regression'))
 
     def groupId(self):
         return 'spatialregression'
@@ -94,7 +95,7 @@ class GeographicallyWeightedRegression(QgisAlgorithm):
         return 'gwr'
 
     def displayName(self):
-        return self.tr('Geographically Weighted Regression')
+        return localized_menu_text('Geographically Weighted Regression', self.tr('Geographically Weighted Regression'))
 
     def __init__(self):
         super().__init__()

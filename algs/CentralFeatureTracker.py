@@ -46,6 +46,7 @@ from qgis.core import (QgsExpression,
 from processing.algs.qgis.QgisAlgorithm import QgisAlgorithm
 from ..utilities import getCentralFeature
 from ..utilities import getPointCoords
+from ..locale_utils import localized_menu_text
 
 pluginPath = os.path.split(os.path.split(os.path.dirname(__file__))[0])[0]
 
@@ -63,7 +64,7 @@ class CentralFeatureTracker(QgisAlgorithm):
         return QIcon(os.path.join(pluginPath, 'spatial_analysis', 'icons', 'tracker.svg'))
 
     def group(self):
-        return self.tr('Spatial Central Tendency')
+        return localized_menu_text('Spatial Central Tendency', self.tr('Spatial Central Tendency'))
 
     def groupId(self):
         return 'centraltendency'
@@ -72,7 +73,7 @@ class CentralFeatureTracker(QgisAlgorithm):
         return 'centralfeaturetracker'
 
     def displayName(self):
-        return self.tr(u'Central Feature Tracker')
+        return localized_menu_text('Central Feature Tracker', self.tr('Central Feature Tracker'))
     
     def msg(self, var):
         return "Type:"+str(type(var))+" repr: "+var.__str__()

@@ -58,6 +58,7 @@ from qgis.core import (
 
 from processing.algs.qgis.QgisAlgorithm import QgisAlgorithm
 from spatial_analysis.forms.VariableParam import ParameterVariable
+from ..locale_utils import localized_menu_text
 
 pluginPath = os.path.split(os.path.split(os.path.dirname(__file__))[0])[0]
 
@@ -88,7 +89,7 @@ class Tsne(QgisAlgorithm):
         return QIcon(os.path.join(pluginPath, 'spatial_analysis', 'icons', 'dimension.svg'))
 
     def group(self):
-        return self.tr('Dimension Reduction')
+        return localized_menu_text('Dimension Reduction', self.tr('Dimension Reduction'))
 
     def groupId(self):
         return 'dimensionreduction'
@@ -97,7 +98,7 @@ class Tsne(QgisAlgorithm):
         return 'tsne'
 
     def displayName(self):
-        return self.tr('t-SNE')
+        return localized_menu_text('t-SNE', self.tr('t-SNE'))
 
     def __init__(self):
         super().__init__()

@@ -59,6 +59,7 @@ from osgeo import gdal
 from osgeo import osr
 import os.path
 import re
+from ..locale_utils import localized_menu_text
 
 pluginPath = os.path.split(os.path.split(os.path.dirname(__file__))[0])[0]
 
@@ -79,7 +80,7 @@ class Gravity(QgisAlgorithm):
         return QIcon(os.path.join(pluginPath, 'spatial_analysis', 'icons', 'gravity.svg'))
 
     def group(self):
-        return self.tr('Gravity Model')
+        return localized_menu_text('Gravity Model', self.tr('Gravity Model'))
 
     def groupId(self):
         return 'gravitymodel'
@@ -88,7 +89,7 @@ class Gravity(QgisAlgorithm):
         return 'gravity'
 
     def displayName(self):
-        return self.tr('Gravity')
+        return localized_menu_text('Gravity', self.tr('Gravity'))
     
     def msg(self, var):
         return "Type:"+str(type(var))+" repr: "+var.__str__()

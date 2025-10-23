@@ -55,6 +55,8 @@ from qgis.core import (QgsField,
 
 from processing.algs.qgis.QgisAlgorithm import QgisAlgorithm
 import numpy as np
+from ..locale_utils import localized_menu_text
+
 from scipy.cluster.hierarchy import linkage
 from scipy.cluster.hierarchy import fcluster
 from spatial_analysis.forms.HarchiParam import ParameterHarchi
@@ -77,7 +79,7 @@ class Hierarchical(QgisAlgorithm):
         return QIcon(os.path.join(pluginPath, 'spatial_analysis', 'icons', 'cluster.svg'))
 
     def group(self):
-        return self.tr('Clustering')
+        return localized_menu_text('Clustering', self.tr('Clustering'))
 
     def groupId(self):
         return 'clustering'
@@ -86,7 +88,7 @@ class Hierarchical(QgisAlgorithm):
         return 'hierarchical'
 
     def displayName(self):
-        return self.tr('Hierarchical')
+        return localized_menu_text('Hierarchical', self.tr('Hierarchical'))
 
     def msg(self, var):
         return "Type:"+str(type(var))+" repr: "+var.__str__()

@@ -33,7 +33,7 @@ from qgis.core import (
     QgsProject,
     QgsProcessingException,
 )
-
+from qgis.PyQt.QtCore import QCoreApplication
 from qgis.PyQt.QtGui import QIcon
 
 from .algs import (
@@ -54,7 +54,7 @@ from .algs import (
     Pca,
     Tsne
 )
-
+from .locale_utils import localized_menu_text
 
 pluginPath = os.path.split(os.path.dirname(__file__))[0]
 
@@ -86,7 +86,10 @@ class SampleFileAlgorithm(QgsProcessingAlgorithm):
         return os.path.basename(self._path)
 
     def group(self):
-        return "Sample Data"
+        return localized_menu_text(
+            'Sample Data',
+            self.tr('Sample Data')
+        )
 
     def groupId(self):
         return "sample_data"
@@ -118,6 +121,10 @@ class SampleFileAlgorithm(QgsProcessingAlgorithm):
     def createInstance(self):
         return SampleFileAlgorithm(self._path)
 
+    @staticmethod
+    def tr(text):
+        return QCoreApplication.translate('SampleFileAlgorithm', text)
+
 
 class SpatialProvider(QgsProcessingProvider):
     def __init__(self):
@@ -148,7 +155,10 @@ class SpatialProvider(QgsProcessingProvider):
         return 'spatialAnalyzer'
 
     def name(self, *args, **kwargs):
-        return 'SpatialAnalyzer - Spatial Analysis Toolbox'
+        return localized_menu_text(
+            'SpatialAnalyzer - Spatial Analysis Toolbox',
+            self.tr('SpatialAnalyzer - Spatial Analysis Toolbox')
+        )
 
     def icon(self):
         return QIcon(os.path.join(pluginPath, 'spatial_analysis', 'icons', 'icon.svg'))

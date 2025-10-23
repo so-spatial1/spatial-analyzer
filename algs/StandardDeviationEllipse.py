@@ -50,6 +50,7 @@ from qgis.core import (QgsExpression,
 from processing.algs.qgis.QgisAlgorithm import QgisAlgorithm
 import numpy as np
 from math import degrees, radians, sqrt, pow, sin, cos, atan, pi
+from ..locale_utils import localized_menu_text
 
 pluginPath = os.path.split(os.path.split(os.path.dirname(__file__))[0])[0]
 
@@ -66,7 +67,7 @@ class StandardDeviationEllipse(QgisAlgorithm):
         return QIcon(os.path.join(pluginPath, 'spatial_analysis', 'icons', 'sde.svg'))
 
     def group(self):
-        return self.tr('Spatial Dispersion')
+        return localized_menu_text('Spatial Dispersion', self.tr('Spatial Dispersion'))
 
     def groupId(self):
         return 'spatialdispersion'
@@ -75,7 +76,7 @@ class StandardDeviationEllipse(QgisAlgorithm):
         return 'standarddeviationellipse'
 
     def displayName(self):
-        return self.tr('Standard Deviation Ellipse')
+        return localized_menu_text('Standard Deviation Ellipse', self.tr('Standard Deviation Ellipse'))
     
     def msg(self, var):
         return "Type:"+str(type(var))+" repr: "+var.__str__()

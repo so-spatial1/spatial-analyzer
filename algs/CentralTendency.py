@@ -48,6 +48,7 @@ from ..utilities import getMeanCenter
 from ..utilities import getMedianCenter
 from ..utilities import getCentralFeature
 from ..utilities import getPointCoords
+from ..locale_utils import localized_menu_text
 
 pluginPath = os.path.split(os.path.split(os.path.dirname(__file__))[0])[0]
 
@@ -69,7 +70,7 @@ class CentralTendency(QgisAlgorithm):
         return QIcon(os.path.join(pluginPath, 'spatial_analysis', 'icons', 'central.svg'))
 
     def group(self):
-        return self.tr('Spatial Central Tendency')
+        return localized_menu_text('Spatial Central Tendency', self.tr('Spatial Central Tendency'))
 
     def groupId(self):
         return 'centraltendency'
@@ -78,7 +79,10 @@ class CentralTendency(QgisAlgorithm):
         return 'spatialcenters'
 
     def displayName(self):
-        return self.tr('Centers(Mean Center, Median Center, Central Feature)')
+        return localized_menu_text(
+            'Centers(Mean Center, Median Center, Central Feature)',
+            self.tr('Centers(Mean Center, Median Center, Central Feature)')
+        )
     
     def msg(self, var):
         return "Type:"+str(type(var))+" repr: "+var.__str__()
